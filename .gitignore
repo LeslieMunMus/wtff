@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# Go build artifacts
+/bin/
+*.exe
+*.test
+*.out
+
+# Local environment overrides
+.env
+.env.local
+
+# Editor state
+.vscode/
+.idea/
