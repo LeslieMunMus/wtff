@@ -1,0 +1,165 @@
+version: 1
+
+# Irreplaceable user content and communication history.
+#
+# These are critical for the same asymmetry as credentials: the recovery cost is
+# unbounded and often emotional rather than technical. A cache can be rebuilt by
+# waiting. A photo library cannot be rebuilt at all.
+
+rules:
+  - id: user-documents-directory
+    match:
+      type: prefix
+      path: "~/Documents"
+    effect: protect
+    severity: critical
+    category: user-content
+    reason: >-
+      The default location for a person's own files. Nothing in a maintenance
+      tool has any business proposing its contents for removal, whatever their
+      age or size suggests about how recently they were opened.
+    provenance:
+      source: "macOS default home directory layout, confirmed present on macOS running Darwin 25.6."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: user-desktop-directory
+    match:
+      type: prefix
+      path: "~/Desktop"
+    effect: protect
+    severity: critical
+    category: user-content
+    reason: >-
+      Working files people keep in front of them. Desktop contents often look
+      disposable by name and modification time while being exactly what someone
+      is in the middle of.
+    provenance:
+      source: "macOS default home directory layout, confirmed present on macOS running Darwin 25.6."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: user-pictures-directory
+    match:
+      type: prefix
+      path: "~/Pictures"
+    effect: protect
+    severity: critical
+    category: user-content
+    reason: >-
+      Contains the Photos library and imported images. A photo library is among
+      the least replaceable things on a personal machine and its internal
+      structure includes cache shaped directories that are not safely separable
+      from the originals.
+    provenance:
+      source: "macOS default home directory layout and Photos library packaging, confirmed present on macOS running Darwin 25.6."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: user-movies-directory
+    match:
+      type: prefix
+      path: "~/Movies"
+    effect: protect
+    severity: critical
+    category: user-content
+    reason: >-
+      Contains video projects and libraries, including editing application
+      packages whose scratch directories cannot be distinguished from source
+      media without understanding the project format.
+    provenance:
+      source: "macOS default home directory layout, confirmed present on macOS running Darwin 25.6."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: user-music-directory
+    match:
+      type: prefix
+      path: "~/Music"
+    effect: protect
+    severity: critical
+    category: user-content
+    reason: >-
+      Contains music libraries and, for audio work, project files and recorded
+      takes that exist nowhere else.
+    provenance:
+      source: "macOS default home directory layout, confirmed present on macOS running Darwin 25.6."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: mail-data
+    match:
+      type: prefix
+      path: "~/Library/Mail"
+    effect: protect
+    severity: critical
+    category: communication
+    reason: >-
+      Holds locally stored messages and attachments. Some of it is a cache of a
+      server side mailbox and some of it is the only copy, and the two are not
+      distinguishable from the outside.
+    provenance:
+      source: "Directory presence and structure confirmed on macOS running Darwin 25.6, alongside Apple Support guidance on Mail storage."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: messages-history
+    match:
+      type: prefix
+      path: "~/Library/Messages"
+    effect: protect
+    severity: critical
+    category: communication
+    reason: >-
+      Holds the Messages conversation database and attachments. Message history
+      that is not synced to iCloud exists only here.
+    provenance:
+      source: "Directory presence confirmed on macOS running Darwin 25.6."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: contacts-database
+    match:
+      type: prefix
+      path: "~/Library/Application Support/AddressBook"
+    effect: protect
+    severity: critical
+    category: personal-records
+    reason: >-
+      Holds the local contacts database including entries that were never synced
+      to an account and therefore have no remote copy.
+    provenance:
+      source: "Directory presence confirmed on macOS running Darwin 25.6."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: calendar-data
+    match:
+      type: prefix
+      path: "~/Library/Calendars"
+    effect: protect
+    severity: critical
+    category: personal-records
+    reason: >-
+      Holds calendar stores including local only calendars that are not backed
+      by any account and cannot be resynchronized after removal.
+    provenance:
+      source: "Apple Support guidance on Calendar accounts and local calendars. Not present on the inspected machine, which is expected when no local calendar has been created."
+      method: documentation
+      verified: "2026-08-05"
+
+  - id: safari-browsing-data
+    match:
+      type: prefix
+      path: "~/Library/Safari"
+    effect: protect
+    severity: critical
+    category: personal-records
+    reason: >-
+      Holds bookmarks, reading list and history. Bookmarks in particular are
+      curated over years and sit in the same directory as genuinely disposable
+      browsing state, so the directory cannot be treated as a cache.
+    provenance:
+      source: "Directory presence and contents confirmed on macOS running Darwin 25.6."
+      method: system-inspection
+      verified: "2026-08-05"

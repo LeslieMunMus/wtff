@@ -1,0 +1,106 @@
+version: 1
+
+# Platform state that looks disposable and is not.
+#
+# The entries here are the ones a size or name based heuristic gets wrong. They
+# sit among caches, they carry cache shaped names, and removing them produces
+# visible breakage rather than reclaimed space.
+
+rules:
+  - id: identity-services-state
+    match:
+      type: prefix
+      path: "~/Library/IdentityServices"
+    effect: protect
+    severity: standard
+    category: platform-security
+    reason: >-
+      Holds the identity and device pairing state used by Messages, FaceTime and
+      Handoff. Removal can sign the user out of continuity features and require
+      re-registering the device against the account.
+    provenance:
+      source: "Directory presence confirmed on macOS running Darwin 25.6."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: browser-cookie-store
+    match:
+      type: prefix
+      path: "~/Library/Cookies"
+    effect: protect
+    severity: standard
+    category: session-state
+    reason: >-
+      Holds cookies and binary cookie stores that carry active login sessions.
+      Removal is not destructive to data but signs the user out of sites
+      broadly, which is surprising from a command described as reclaiming space.
+    provenance:
+      source: "Directory presence confirmed on macOS running Darwin 25.6."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: application-sandbox-documents
+    match:
+      type: glob
+      path: "~/Library/Containers/*/Data/Documents"
+    effect: protect
+    severity: critical
+    category: user-content
+    reason: >-
+      Inside a sandboxed application's container, the Documents directory holds
+      that application's user created files. The surrounding container also
+      holds genuine caches, so a rule covering the container as a whole would be
+      both too broad and too easy to write by mistake.
+    provenance:
+      source: "Apple developer documentation on the application sandbox container directory layout."
+      method: documentation
+      verified: "2026-08-05"
+
+  - id: application-group-documents
+    match:
+      type: glob
+      path: "~/Library/Group Containers/*/Documents"
+    effect: protect
+    severity: critical
+    category: user-content
+    reason: >-
+      Group containers are shared between an application and its extensions, and
+      the Documents directory within one holds user created files rather than
+      regenerable state.
+    provenance:
+      source: "Apple developer documentation on app groups and shared container directories."
+      method: documentation
+      verified: "2026-08-05"
+
+  - id: wtff-own-state
+    match:
+      type: prefix
+      path: "~/Library/Application Support/wtff"
+    effect: protect
+    severity: critical
+    category: tool-state
+    reason: >-
+      wtff's own staging area and records. Removing this discards the batch
+      records that undo depends on, which makes the act of removing it the one
+      operation this tool cannot reverse. The deletion engine enforces this
+      independently; the rule exists so the protection is also visible here.
+    provenance:
+      source: "This project's own layout, defined in the deletion engine staging design."
+      method: documentation
+      verified: "2026-08-05"
+
+  - id: wtff-own-logs
+    match:
+      type: prefix
+      path: "~/Library/Logs/wtff"
+    effect: protect
+    severity: standard
+    category: tool-state
+    reason: >-
+      wtff's operation log, which is the record of what the tool did and the
+      basis for reviewing its past behavior. Removing it during a run would
+      truncate the audit trail of that same run.
+    provenance:
+      source: "This project's own layout, defined in the operation log design."
+      method: documentation
+      verified: "2026-08-05"

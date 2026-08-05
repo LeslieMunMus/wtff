@@ -1,0 +1,44 @@
+version: 1
+
+# Synchronized storage.
+#
+# These directories carry a hazard that local data does not: a deletion here
+# does not stay local. It propagates to every other device on the account, and
+# to collaborators on shared folders, usually before anyone notices. A local
+# undo cannot reverse that, so the protection has to prevent it rather than rely
+# on being able to put things back.
+
+rules:
+  - id: icloud-drive-storage
+    match:
+      type: prefix
+      path: "~/Library/Mobile Documents"
+    effect: protect
+    severity: critical
+    category: synchronized-storage
+    reason: >-
+      Backs iCloud Drive and the per application iCloud containers. Removal
+      propagates to every signed in device, and files stored only in the cloud
+      appear here as small placeholders whose on disk size gives no indication
+      of what they represent.
+    provenance:
+      source: "Apple Support, iCloud Drive file storage. Directory presence confirmed on macOS running Darwin 25.6."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: third-party-cloud-storage-mounts
+    match:
+      type: prefix
+      path: "~/Library/CloudStorage"
+    effect: protect
+    severity: critical
+    category: synchronized-storage
+    reason: >-
+      Where macOS mounts third party providers such as Dropbox, Google Drive and
+      OneDrive through the File Provider system. Contents are other people's
+      shared folders as often as the user's own, and a deletion propagates to
+      all of them.
+    provenance:
+      source: "Apple developer documentation on the File Provider framework. Directory presence confirmed on macOS running Darwin 25.6."
+      method: system-inspection
+      verified: "2026-08-05"

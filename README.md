@@ -6,8 +6,19 @@ cleanup tool, and it does not reuse code, comments, or curated data from any oth
 
 ## Status
 
-Foundation phase. No user-facing commands exist yet. See `docs/decisions/` for what has been
-decided and `docs/architecture/` for how the system is meant to fit together.
+The safety core is built and tested. There is no command line interface yet, so nothing is
+runnable from a terminal.
+
+Implemented: structural path validation, the deletion engine with plan and apply, staging based
+undo, the operation log, and the protection rule schema with an initial rule set.
+
+Not yet built: the command line interface, the full-screen terminal interface, the `clean` rule
+set that proposes what to remove, and the `uninstall` command.
+
+See `docs/decisions/` for a numbered record of what was decided and why, and
+`docs/architecture/` for how the pieces fit together. Packages that are implemented document
+themselves in their own `doc.go`; the remaining `README.md` files mark packages that are still
+placeholders.
 
 ## Scope for version one
 

@@ -1,0 +1,92 @@
+version: 1
+
+# Developer tool state, and the first carve outs in the rule set.
+#
+# This file demonstrates the pattern the schema exists for. A tool directory
+# such as ~/.docker holds configuration and an authentication token beside
+# genuinely rebuildable caches. Protecting the whole directory would put a
+# credential out of reach of a mistake, at the cost of never reclaiming the
+# cache. Protecting nothing would reclaim the cache and eventually delete the
+# credential. The carve out lets both be true, and the critical severity on the
+# credential means no future carve out can widen its way back over it.
+
+rules:
+  - id: docker-configuration
+    match:
+      type: prefix
+      path: "~/.docker"
+    effect: protect
+    severity: standard
+    category: developer-configuration
+    reason: >-
+      Holds Docker client configuration including registry authentication.
+      Removal signs the user out of container registries and discards context
+      definitions pointing at remote engines.
+    provenance:
+      source: "Docker documentation on the client configuration file and its default location."
+      method: documentation
+      verified: "2026-08-05"
+
+  - id: docker-registry-credentials
+    match:
+      type: exact
+      path: "~/.docker/config.json"
+    effect: protect
+    severity: critical
+    category: credentials
+    reason: >-
+      The Docker client configuration file itself, which holds registry
+      authentication material. Marked critical so that a carve out written for
+      the surrounding directory can never expose it.
+    provenance:
+      source: "Docker documentation on the client configuration file and credential storage."
+      method: documentation
+      verified: "2026-08-05"
+
+  - id: docker-rebuildable-cache
+    match:
+      type: prefix
+      path: "~/.docker/cache"
+    effect: allow
+    severity: standard
+    category: developer-cache
+    reason: >-
+      A rebuildable cache directory inside an otherwise protected configuration
+      directory. Carved out so the surrounding protection does not make ordinary
+      reclaimable space permanently unreachable.
+    provenance:
+      source: "Docker documentation on client side caching, and the layout of the client configuration directory."
+      method: documentation
+      verified: "2026-08-05"
+
+  - id: git-global-configuration
+    match:
+      type: exact
+      path: "~/.gitconfig"
+    effect: protect
+    severity: standard
+    category: developer-configuration
+    reason: >-
+      Global Git configuration including identity, signing keys and aliases
+      accumulated over years. Small, so there is no reclaim argument for it at
+      all.
+    provenance:
+      source: "Git documentation for git-config, which documents ~/.gitconfig as the per user configuration file."
+      method: documentation
+      verified: "2026-08-05"
+
+  - id: shell-history-and-profile
+    match:
+      type: glob
+      path: "~/.*rc"
+    effect: protect
+    severity: standard
+    category: developer-configuration
+    reason: >-
+      Shell startup files carry a person's accumulated environment setup. They
+      are tiny, frequently uncommitted anywhere, and expensive to reconstruct
+      from memory.
+    provenance:
+      source: "Shell manual pages for zsh and bash, which document per user startup files in the home directory."
+      method: documentation
+      verified: "2026-08-05"
