@@ -34,6 +34,18 @@ field on every entry.
 - Every completed step gets documented before moving on: what was done, why it was done that
   way, and how it could improve with time. Status is marked with the word "done," never an
   emoji. Completed work lives in `docs/decisions/` as a dated, numbered entry.
+- Every stage gets a red team pass before it is called done. Attack the work that was just
+  built, looking for what the design assumed rather than proved: comments asserting a property
+  the code does not actually have, guards that a specific input shape walks around, windows
+  between a check and the action it authorizes, and error paths that leak or fail open. Findings
+  are recorded in the decision entry for that stage, including the ones that turned out to be
+  wrong, and each real finding gets a regression test that would have caught it. Catching
+  defects at the stage that introduced them is far cheaper than finding them later, when other
+  work already depends on the broken behavior.
+- Verify claims rather than asserting them. A passing test whose name describes a property is
+  not evidence the property holds; confirm independently that the test fails when the protection
+  is absent, or demonstrate the underlying behavior directly. Several tests in this project were
+  found to pass for the wrong reason.
 - The terminal interface must be a full-screen application, in the style of Claude Code's own
   CLI, not a scrolling line-by-line script. See `docs/architecture/terminal-interface.md`.
 - Model routing is Opus for safety-critical, high-blast-radius work (the deletion engine, path

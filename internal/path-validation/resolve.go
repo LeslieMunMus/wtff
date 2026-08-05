@@ -148,6 +148,49 @@ func walk(logical string) (result *Resolved, err error) {
 
 		name := remaining[0]
 		rest := remaining[1:]
+
+		// A parent reference can only arrive here from inside a link target,
+		// since caller supplied paths are rejected earlier. It cannot be
+		// treated as an ordinary component: dot-dot is a real directory entry,
+		// so O_NOFOLLOW does not stop it and the walk would climb while the
+		// accumulated logical string kept growing, leaving the reported path
+		// disagreeing with where the operation actually lands. Handle it as its
+		// own case so the descriptor and the string move together.
+		if name == ".." {
+			if len(rest) == 0 {
+				// Defensive, and currently unreachable: a link is only followed
+				// as an intermediate component, so at least one component
+				// always follows a spliced target, and caller supplied parent
+				// references are rejected before the walk starts. Kept because
+				// the cost is one comparison and the alternative on some future
+				// change is returning a handle whose leaf name is a parent
+				// reference. Deliberately not covered by a test, since a test
+				// asserting unreachable behavior only documents that it is
+				// unreachable.
+				return nil, fmt.Errorf("%w: %s resolves to a parent directory", ErrTraversal, logical)
+			}
+			parent, parentErr := unix.Openat(dir, "..",
+				unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+			if parentErr != nil {
+				return nil, fmt.Errorf("%w: cannot ascend from %s: %v", ErrResolution, dirPath, parentErr)
+			}
+			var parentStat unix.Stat_t
+			if statErr := unix.Fstat(parent, &parentStat); statErr != nil {
+				_ = unix.Close(parent)
+				return nil, fmt.Errorf("%w: cannot inspect parent of %s: %v", ErrResolution, dirPath, statErr)
+			}
+			parentKey := identityKey{device: uint64(parentStat.Dev), inode: parentStat.Ino}
+			if entry, denied := deniedTreeByIdentity(parentKey); denied {
+				_ = unix.Close(parent)
+				return nil, fmt.Errorf("%w: %s ascends into %s", ErrDenied, logical, entry)
+			}
+			_ = unix.Close(dir)
+			dir = parent
+			dirPath = parentOf(dirPath)
+			remaining = rest
+			continue
+		}
+
 		childPath := joinPath(dirPath, name)
 
 		var st unix.Stat_t
@@ -228,6 +271,23 @@ func walk(logical string) (result *Resolved, err error) {
 		if nextErr != nil {
 			return nil, fmt.Errorf("%w: cannot open %s: %v", ErrResolution, childPath, nextErr)
 		}
+
+		// Confirm the descriptor refers to the directory that was just checked.
+		// O_NOFOLLOW rejects an entry swapped for a link, but not one swapped
+		// for a different directory in the window between the check above and
+		// this open. Comparing the opened descriptor's own identity closes
+		// that window: from here on the walk is holding the inspected object,
+		// not a name that pointed at it a moment ago.
+		var openedStat unix.Stat_t
+		if statErr := unix.Fstat(next, &openedStat); statErr != nil {
+			_ = unix.Close(next)
+			return nil, fmt.Errorf("%w: cannot confirm %s after opening: %v", ErrResolution, childPath, statErr)
+		}
+		if uint64(openedStat.Dev) != key.device || openedStat.Ino != key.inode {
+			_ = unix.Close(next)
+			return nil, fmt.Errorf("%w: %s changed between inspection and opening", ErrResolution, childPath)
+		}
+
 		_ = unix.Close(dir)
 		dir = next
 		dirPath = childPath
@@ -274,9 +334,12 @@ func normalizeAndCheck(target string) (string, error) {
 }
 
 // splitComponents breaks a path into its meaningful components, discarding
-// empty and single dot entries. Dot-dot is not filtered here: it is rejected
-// earlier for caller supplied paths, and a link target containing one is
-// handled by the walk failing to find the component.
+// empty and single dot entries.
+//
+// Dot-dot is preserved rather than filtered, and the walk handles it as an
+// explicit case. Filtering it here would silently rewrite a link target into a
+// different path; failing to handle it at all would let the walk climb while
+// the reported path disagreed with the destination.
 func splitComponents(path string) []string {
 	parts := strings.Split(path, "/")
 	out := make([]string, 0, len(parts))
@@ -294,6 +357,19 @@ func joinPath(dir, name string) string {
 		return "/" + name
 	}
 	return dir + "/" + name
+}
+
+// parentOf returns the containing directory of a logical path, keeping the
+// string in step with an ascent the walk has already performed on descriptors.
+func parentOf(dir string) string {
+	if dir == "/" {
+		return "/"
+	}
+	cut := strings.LastIndex(dir, "/")
+	if cut <= 0 {
+		return "/"
+	}
+	return dir[:cut]
 }
 
 // readLinkAt reads a link target relative to an open directory descriptor,
