@@ -115,12 +115,108 @@ func Resolve(target string) (*Resolved, error) {
 	if entry, denied := deniedByString(logical); denied {
 		return nil, fmt.Errorf("%w: %s is denied by %s", ErrDenied, logical, entry)
 	}
-	return walk(logical)
+	return walk(logical, leafIsTarget)
 }
+
+// ResolvedDir is a link safe handle to an existing directory, held open as a
+// container to act inside rather than as something to remove.
+type ResolvedDir struct {
+	fd     int
+	path   string
+	closed bool
+}
+
+// FD returns the open directory descriptor, for descriptor relative calls.
+func (d *ResolvedDir) FD() int { return d.fd }
+
+// Path returns the fully resolved directory path.
+func (d *ResolvedDir) Path() string { return d.path }
+
+// Close releases the descriptor. It is safe to call more than once.
+func (d *ResolvedDir) Close() error {
+	if d.closed || d.fd < 0 {
+		return nil
+	}
+	d.closed = true
+	err := unix.Close(d.fd)
+	d.fd = -1
+	return err
+}
+
+// ResolveDirectory returns a link safe handle to a directory that the caller
+// intends to act inside, such as restoring a file back to where it came from.
+//
+// It differs from Resolve in exactly one way, and the difference is deliberate.
+// Resolve refuses a path that names a protected root, because naming one as a
+// deletion target is always wrong. Writing inside one is not: a file that
+// legitimately lived directly beneath a directory like /Library has to be
+// restorable to it, and applying the deletion floor to a container would make
+// undo fail for every such item.
+//
+// The tree denials still apply in full. A container inside an operating system
+// tree is refused, because nothing wtff does should be writing there.
+func ResolveDirectory(target string) (*ResolvedDir, error) {
+	logical, err := normalizeAndCheck(target)
+	if err != nil {
+		return nil, err
+	}
+	if entry, denied := deniedTreeByString(logical); denied {
+		return nil, fmt.Errorf("%w: %s is inside %s", ErrDenied, logical, entry)
+	}
+
+	if logical == "/" {
+		return nil, fmt.Errorf("%w: the volume root is not a usable container", ErrDenied)
+	}
+
+	resolved, err := walk(logical, leafIsContainer)
+	if err != nil {
+		return nil, err
+	}
+	defer resolved.Close()
+
+	if resolved.IsSymlink() || !resolved.IsDir() {
+		return nil, fmt.Errorf("%w: %s", ErrNotDirectory, logical)
+	}
+
+	fd, openErr := unix.Openat(resolved.ParentFD(), resolved.LeafName(),
+		unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if openErr != nil {
+		return nil, fmt.Errorf("%w: cannot open %s: %v", ErrResolution, logical, openErr)
+	}
+
+	// Confirm the opened directory is the one that was inspected, closing the
+	// same window the walk closes on every intermediate component.
+	var st unix.Stat_t
+	if statErr := unix.Fstat(fd, &st); statErr != nil {
+		_ = unix.Close(fd)
+		return nil, fmt.Errorf("%w: cannot confirm %s: %v", ErrResolution, logical, statErr)
+	}
+	if uint64(st.Dev) != resolved.Identity().Device || st.Ino != resolved.Identity().Inode {
+		_ = unix.Close(fd)
+		return nil, fmt.Errorf("%w: %s changed while being opened", ErrResolution, logical)
+	}
+	// A container inside a denied tree, reached by any route, is refused here
+	// too rather than relying on the text check above.
+	if entry, denied := deniedTreeByIdentity(identityKey{device: uint64(st.Dev), inode: st.Ino}); denied {
+		_ = unix.Close(fd)
+		return nil, fmt.Errorf("%w: %s resolves inside %s", ErrDenied, logical, entry)
+	}
+
+	return &ResolvedDir{fd: fd, path: resolved.Path()}, nil
+}
+
+// leafDisposition selects whether the final component is being resolved as
+// something to act on or as a container to act inside.
+type leafDisposition int
+
+const (
+	leafIsTarget leafDisposition = iota
+	leafIsContainer
+)
 
 // walk performs the component by component resolution described in the package
 // documentation.
-func walk(logical string) (result *Resolved, err error) {
+func walk(logical string, disposition leafDisposition) (result *Resolved, err error) {
 	dir, openErr := unix.Open("/", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
 	if openErr != nil {
 		return nil, fmt.Errorf("%w: cannot open volume root: %v", ErrResolution, openErr)
@@ -235,11 +331,20 @@ func walk(logical string) (result *Resolved, err error) {
 
 		if isLast {
 			key := identityKey{device: uint64(st.Dev), inode: st.Ino}
-			if entry, denied := deniedExactByIdentity(key); denied {
-				return nil, fmt.Errorf("%w: %s resolves to %s", ErrDenied, logical, entry)
-			}
-			if entry, denied := deniedByString(childPath); denied {
-				return nil, fmt.Errorf("%w: %s is denied by %s", ErrDenied, childPath, entry)
+			// A container is only checked against the tree denials. Naming a
+			// protected root as a deletion target is always wrong; acting
+			// inside one is how an item that lived there gets restored.
+			if disposition == leafIsContainer {
+				if entry, denied := deniedTreeByIdentity(key); denied {
+					return nil, fmt.Errorf("%w: %s is inside %s", ErrDenied, logical, entry)
+				}
+			} else {
+				if entry, denied := deniedExactByIdentity(key); denied {
+					return nil, fmt.Errorf("%w: %s resolves to %s", ErrDenied, logical, entry)
+				}
+				if entry, denied := deniedByString(childPath); denied {
+					return nil, fmt.Errorf("%w: %s is denied by %s", ErrDenied, childPath, entry)
+				}
 			}
 			handedOff = true
 			return &Resolved{
