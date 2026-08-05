@@ -59,5 +59,17 @@ field on every entry.
 
 ## Verification
 
-There is no build yet. Once `go.mod` exists, this section will list the commands to run before
-any change is considered complete (build, vet, test, lint).
+Run before any change is considered complete:
+
+```bash
+gofmt -l .          # must print nothing
+go vet ./...
+go test ./...
+```
+
+Never claim a fix or a property holds because a test with a matching name passes. Confirm the
+test actually exercises the defect: run it against the code before the fix and see it fail, or
+demonstrate the underlying behavior directly (a small standalone program, a manual repro against
+the compiled binary). This project has caught three tests that passed for a reason other than
+their name claimed, and the pattern that catches it is checking, not writing a more careful test
+name.

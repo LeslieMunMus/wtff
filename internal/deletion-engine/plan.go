@@ -51,6 +51,14 @@ type PlanOptions struct {
 	// MeasureSizes controls whether directory sizes are computed. Callers that
 	// only need to know what would be touched can skip the walk.
 	MeasureSizes bool
+
+	// SkipSink, when set, receives every rejected candidate's path and reason.
+	//
+	// Skips are always written to Log, but a log line is not something an
+	// interactive caller can read back inside the same run. A caller that wants
+	// to tell a person why their selection came back short, rather than sending
+	// them to a log file to find out, sets this.
+	SkipSink func(path, reason string)
 }
 
 // ErrNoPolicy is returned when planning is attempted without a policy checker.
@@ -99,6 +107,9 @@ func Plan(candidates []Candidate, opts PlanOptions) (*Manifest, error) {
 				Outcome: "skipped",
 				Detail:  skipReason,
 			})
+			if opts.SkipSink != nil {
+				opts.SkipSink(candidate.Path, skipReason)
+			}
 			continue
 		}
 
