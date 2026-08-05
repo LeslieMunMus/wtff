@@ -79,15 +79,134 @@ func newBatchPickBlock(deps *Deps, theme Theme, batches []*deletionengine.Batch)
 	}
 	return &pickBlock{
 		theme: theme,
-		title: "staged · choose a batch to restore",
+		title: "staged · choose a batch",
 		rows:  rows,
 		choose: func(index int) tea.Cmd {
-			return transition(newUndoBlock(deps, theme, batches[index]))
+			return transition(newBatchActionBlock(deps, theme, batches[index]))
 		},
 		cancel: func() tea.Cmd {
 			return finish(cancelEntry(theme, "staged"))
 		},
 	}
+}
+
+// newBatchActionBlock asks what to do with a chosen batch.
+//
+// Staging deliberately does not decide this at removal time. A person cleaning
+// up does not yet know whether they will want something back, and the value of
+// staging is precisely that they do not have to know. This is where they say,
+// once they have seen what is actually held and had time to notice anything
+// missing.
+func newBatchActionBlock(deps *Deps, theme Theme, batch *deletionengine.Batch) *pickBlock {
+	total, known := batchTotalBytes(batch)
+	size := humanBytes(total)
+	if !known {
+		size += " (partial)"
+	}
+
+	return &pickBlock{
+		theme: theme,
+		title: fmt.Sprintf("staged · %s · %d item(s) · %s",
+			batch.BatchID, len(batch.Items), size),
+		rows: []string{
+			"Restore everything to where it came from",
+			"Delete permanently and reclaim the space",
+		},
+		choose: func(index int) tea.Cmd {
+			if index == 0 {
+				return transition(newUndoBlock(deps, theme, batch))
+			}
+			warning := fmt.Sprintf(
+				"%d item(s), %s, will be deleted permanently. This cannot be undone.",
+				len(batch.Items), size)
+			return transition(newConfirmWordBlock(theme,
+				"staged · confirm permanent deletion", warning,
+				func() tea.Cmd {
+					return transition(newPurgeBatchBlock(deps, theme, batch))
+				},
+				func() tea.Cmd {
+					return finish(cancelEntry(theme, "staged"))
+				},
+			))
+		},
+		cancel: func() tea.Cmd {
+			return finish(cancelEntry(theme, "staged"))
+		},
+	}
+}
+
+// purgeBatchBlock permanently deletes one staged batch.
+type purgeBatchBlock struct {
+	deps     *Deps
+	theme    Theme
+	batch    *deletionengine.Batch
+	activity activityIndicator
+}
+
+func newPurgeBatchBlock(deps *Deps, theme Theme, batch *deletionengine.Batch) *purgeBatchBlock {
+	return &purgeBatchBlock{deps: deps, theme: theme, batch: batch,
+		activity: newActivityIndicator("Deleting")}
+}
+
+type purgeBatchDoneMsg struct {
+	result *deletionengine.PurgeResult
+	err    error
+}
+
+func (p *purgeBatchBlock) Init() tea.Cmd {
+	return tea.Batch(
+		func() tea.Msg {
+			area, err := p.deps.newStagingArea()
+			if err != nil {
+				return purgeBatchDoneMsg{err: err}
+			}
+			result, err := area.PurgeBatch(p.batch, p.deps.Log)
+			return purgeBatchDoneMsg{result: result, err: err}
+		},
+		p.activity.init(),
+	)
+}
+
+func (p *purgeBatchBlock) Update(msg tea.Msg) (liveBlock, tea.Cmd) {
+	done, ok := msg.(purgeBatchDoneMsg)
+	if !ok {
+		updated, cmd := p.activity.update(msg)
+		p.activity = updated
+		return p, cmd
+	}
+
+	if done.err != nil {
+		return p, finish(errorEntry(p.theme, "delete failed: "+done.err.Error()))
+	}
+
+	var details []string
+	for _, outcome := range done.result.Outcomes {
+		if outcome.Purged {
+			details = append(details, "deleted "+outcome.Item.OriginalPath)
+		} else {
+			details = append(details, "failed  "+outcome.Item.OriginalPath+
+				" ("+outcome.Err.Error()+")")
+		}
+	}
+
+	size := humanBytes(done.result.BytesReclaimed)
+	if done.result.SizePartial {
+		size = "at least " + size
+	}
+	entries := []transcriptEntry{successEntry(p.theme,
+		fmt.Sprintf("Deleted %d item(s) permanently · %s reclaimed",
+			done.result.PurgedCount, size),
+		details...)}
+	if done.result.FailedCount > 0 {
+		entries = append(entries, errorEntry(p.theme,
+			fmt.Sprintf("%d item(s) could not be deleted and are still staged.",
+				done.result.FailedCount)))
+	}
+	return p, finish(entries...)
+}
+
+func (p *purgeBatchBlock) View(theme Theme, width int) string {
+	return "  " + p.activity.view(theme)
 }
 
 func batchTotalBytes(batch *deletionengine.Batch) (total int64, allKnown bool) {

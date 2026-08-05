@@ -165,6 +165,12 @@ func (s *selectionBlock) Update(msg tea.Msg) (liveBlock, tea.Cmd) {
 			return s, nil
 		}
 		filtered := filterManifest(s.manifest, confirm.selected)
+		// Staging goes straight through, because it is reversible and a
+		// confirmation for something undoable is ceremony. A purge does not,
+		// and gets the word gate instead.
+		if filtered.Action == deletionengine.ActionPurge {
+			return s, transition(confirmPurgeManifest(s.deps, s.theme, s.command, filtered))
+		}
 		return s, transition(newApplyBlock(s.deps, s.theme, s.command, filtered))
 	}
 
@@ -174,6 +180,15 @@ func (s *selectionBlock) Update(msg tea.Msg) (liveBlock, tea.Cmd) {
 }
 
 func (s *selectionBlock) View(theme Theme, width int) string {
+	// The verb has to match what Enter actually does. A purge showing "select
+	// items to stage" would promise reversibility at the one moment there is
+	// none, which is the most expensive place in this program to be wrong
+	// about a word. Caught by looking at a real rendered purge, not by a test.
+	title, enterHint := " · select items to stage", "stage"
+	if s.manifest.Action == deletionengine.ActionPurge {
+		title, enterHint = " · select items to delete permanently", "delete"
+	}
+
 	boxWidth := width - 2
 	inner := s.list.view(theme, boxWidth-4, selectionVisibleRows+2)
 	if s.note != "" {
@@ -181,8 +196,8 @@ func (s *selectionBlock) View(theme Theme, width int) string {
 	}
 	inner += "\n" + renderKeyHints(theme,
 		[2]string{"space", "toggle"}, [2]string{"a", "all"},
-		[2]string{"enter", "stage"}, [2]string{"esc", "cancel"})
-	return renderTitledBox(theme, s.command+" · select items to stage", inner, boxWidth)
+		[2]string{"enter", enterHint}, [2]string{"esc", "cancel"})
+	return renderTitledBox(theme, s.command+title, inner, boxWidth)
 }
 
 // applyBlock runs Apply and reports the outcome into the transcript, with
@@ -196,8 +211,21 @@ type applyBlock struct {
 }
 
 func newApplyBlock(deps *Deps, theme Theme, command string, manifest *deletionengine.Manifest) *applyBlock {
+	// The manifest's own action decides what this block does, rather than a
+	// separate flag the caller could set inconsistently with the manifest it
+	// passed. Apply reads the action from the manifest too, so there is one
+	// answer to "is this reversible" and both of us read it from the same place.
+	label := "Staging"
+	if manifest.Action == deletionengine.ActionPurge {
+		label = "Deleting"
+	}
 	return &applyBlock{deps: deps, theme: theme, command: command, manifest: manifest,
-		activity: newActivityIndicator("Staging")}
+		activity: newActivityIndicator(label)}
+}
+
+// purging reports whether this block removes permanently.
+func (a *applyBlock) purging() bool {
+	return a.manifest.Action == deletionengine.ActionPurge
 }
 
 type applyDoneMsg struct {
@@ -208,9 +236,16 @@ type applyDoneMsg struct {
 func (a *applyBlock) Init() tea.Cmd {
 	return tea.Batch(
 		func() tea.Msg {
-			staging, err := a.deps.newStagingArea()
-			if err != nil {
-				return applyDoneMsg{err: err}
+			// A purge has nowhere to move things to, so it opens no staging
+			// area. Creating one anyway would leave an empty batch directory
+			// behind suggesting a restore point that does not exist.
+			var staging *deletionengine.StagingArea
+			if !a.purging() {
+				opened, err := a.deps.newStagingArea()
+				if err != nil {
+					return applyDoneMsg{err: err}
+				}
+				staging = opened
 			}
 			result, err := deletionengine.Apply(a.manifest, deletionengine.ApplyOptions{
 				Staging: staging, Policy: a.deps.Rules, Log: a.deps.Log,
@@ -229,15 +264,20 @@ func (a *applyBlock) Update(msg tea.Msg) (liveBlock, tea.Cmd) {
 		return a, cmd
 	}
 
+	verb, pastTense := "staging", "staged "
+	if a.purging() {
+		verb, pastTense = "deleting", "deleted"
+	}
+
 	if done.err != nil {
-		return a, finish(errorEntry(a.theme, "staging failed: "+done.err.Error()))
+		return a, finish(errorEntry(a.theme, verb+" failed: "+done.err.Error()))
 	}
 
 	var details []string
 	for _, outcome := range done.result.Outcomes {
 		switch {
 		case outcome.Applied:
-			details = append(details, "staged  "+outcome.Entry.ResolvedPath)
+			details = append(details, pastTense+" "+outcome.Entry.ResolvedPath)
 		case outcome.Skipped:
 			details = append(details, "skipped "+outcome.Entry.ResolvedPath+" ("+outcome.Reason+")")
 		case outcome.Err != nil:
@@ -245,10 +285,13 @@ func (a *applyBlock) Update(msg tea.Msg) (liveBlock, tea.Cmd) {
 		}
 	}
 
-	entries := []transcriptEntry{successEntry(a.theme,
-		fmt.Sprintf("Staged %d item(s) · %s · restore anytime with staged",
-			done.result.AppliedCount, humanBytes(done.result.BytesApplied)),
-		details...)}
+	summary := fmt.Sprintf("Staged %d item(s) · %s · restore anytime with staged",
+		done.result.AppliedCount, humanBytes(done.result.BytesApplied))
+	if a.purging() {
+		summary = fmt.Sprintf("Deleted %d item(s) permanently · %s reclaimed",
+			done.result.AppliedCount, humanBytes(done.result.BytesApplied))
+	}
+	entries := []transcriptEntry{successEntry(a.theme, summary, details...)}
 	if done.result.SkippedCount > 0 {
 		entries = append(entries, mutedEntry(a.theme,
 			fmt.Sprintf("%d item(s) skipped at apply time.", done.result.SkippedCount)))

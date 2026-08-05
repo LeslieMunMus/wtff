@@ -123,6 +123,18 @@ func validate(entry *Entry) error {
 		return fmt.Errorf("%w: %s needs a reason that explains the justification, not a label",
 			ErrInvalidEntry, entry.ID)
 	}
+	// A purgeable entry authorizes irreversible removal, so it has to say why
+	// in its own words. Requiring the sentence means adding one is a decision
+	// someone wrote down and a reviewer can argue with, rather than a boolean
+	// that slipped through.
+	if entry.Purgeable && len(strings.TrimSpace(entry.PurgeReason)) < 20 {
+		return fmt.Errorf("%w: %s is marked purgeable and must explain in purge_reason why "+
+			"permanent removal is appropriate", ErrInvalidEntry, entry.ID)
+	}
+	if !entry.Purgeable && strings.TrimSpace(entry.PurgeReason) != "" {
+		return fmt.Errorf("%w: %s gives a purge_reason but is not marked purgeable",
+			ErrInvalidEntry, entry.ID)
+	}
 	if strings.TrimSpace(entry.Provenance.Source) == "" {
 		return fmt.Errorf("%w: %s has no provenance source", ErrInvalidEntry, entry.ID)
 	}

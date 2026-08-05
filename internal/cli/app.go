@@ -74,8 +74,10 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runUninstall(args[1:], stdin, stdout, stderr)
 	case "undo":
 		return runUndo(args[1:], stdin, stdout, stderr)
+	case "purge":
+		return runPurge(args[1:], stdin, stdout, stderr)
 	case "staged":
-		return runStaged(args[1:], stdout, stderr)
+		return runStaged(args[1:], stdin, stdout, stderr)
 	case "version", "--version", "-v":
 		fmt.Fprintln(stdout, Version)
 		return 0
@@ -126,12 +128,19 @@ Usage:
       Remove one or more paths. Staged by default, which is reversible
       through "wtff undo"; pass --purge to remove permanently instead.
 
+  wtff purge [--dry-run] [--yes]
+      Permanently empty the places that hold things already discarded, which
+      today means the Trash. Nothing is staged, because nothing here was
+      inferred: emptying the Trash completes a decision the user already
+      made. Deep cleanup of caches belongs to "wtff clean" instead.
+
   wtff undo <batch-id>
       Restore every item from a staged batch to where it came from.
       Find a batch id with "wtff staged".
 
-  wtff staged
-      List batches currently held in the staging area.
+  wtff staged [--purge <batch-id> | --purge --all]
+      List batches currently held in the staging area. With --purge, delete
+      a staged batch permanently instead of keeping it available for undo.
 
   wtff version
       Print the version.

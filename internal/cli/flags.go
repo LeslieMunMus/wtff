@@ -51,6 +51,7 @@ func reorderFlagsFirst(args []string, knownFlags map[string]bool) []string {
 var commonBoolFlags = map[string]bool{
 	"dry-run": true,
 	"purge":   true,
+	"all":     true,
 	"yes":     true,
 	"help":    true,
 	"h":       true,

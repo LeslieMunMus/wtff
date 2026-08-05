@@ -45,6 +45,22 @@ type Entry struct {
 	// KindOpaque, since that kind never enumerates children.
 	ExcludePrefixes []string `yaml:"exclude_prefixes,omitempty"`
 
+	// Purgeable marks an entry that "wtff purge" may remove permanently,
+	// without staging it for undo first.
+	//
+	// The bar is deliberately higher than "regenerable." Nearly every entry in
+	// this catalog is regenerable, and staging exists because regenerable is a
+	// claim rather than a proof: the cost of being wrong about a cache is
+	// unrecoverable, and cheap to avoid. What qualifies here is narrower, an
+	// entry whose contents the person has already chosen to discard, where
+	// wtff is completing an intent rather than forming one.
+	Purgeable bool `yaml:"purgeable,omitempty"`
+
+	// PurgeReason explains why permanent removal is defensible for this entry
+	// specifically. Required whenever Purgeable is set, so the list cannot
+	// grow by someone flipping a boolean.
+	PurgeReason string `yaml:"purge_reason,omitempty"`
+
 	Provenance Provenance `yaml:"provenance"`
 
 	// origin names the file this entry came from, for diagnostics.
@@ -53,6 +69,18 @@ type Entry struct {
 
 // Origin reports which catalog file defined this entry.
 func (e Entry) Origin() string { return e.origin }
+
+// PurgeableEntries returns the subset that "wtff purge" may remove
+// permanently. Everything else belongs to "wtff clean", which stages first.
+func PurgeableEntries(entries []Entry) []Entry {
+	var purgeable []Entry
+	for _, entry := range entries {
+		if entry.Purgeable {
+			purgeable = append(purgeable, entry)
+		}
+	}
+	return purgeable
+}
 
 // entryDocument is the on disk shape of a catalog file.
 type entryDocument struct {

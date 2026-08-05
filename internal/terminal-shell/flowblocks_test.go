@@ -308,6 +308,15 @@ func TestStagedFlowRestoresARealBatch(t *testing.T) {
 
 	_, chooseCmd := picker.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	flow = runCmd(t, chooseCmd).(flowMsg)
+	actions, ok := flow.block.(*pickBlock)
+	if !ok {
+		t.Fatalf("expected the restore-or-delete choice, got %T", flow.block)
+	}
+
+	// Restore is the first choice, so the cursor's resting position is the
+	// reversible one. Reaching permanent deletion takes a deliberate move.
+	_, restoreCmd := actions.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	flow = runCmd(t, restoreCmd).(flowMsg)
 	undo, ok := flow.block.(*undoBlock)
 	if !ok {
 		t.Fatalf("expected an undo block, got %T", flow.block)

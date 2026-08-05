@@ -7,10 +7,19 @@ entries:
     path: "~/.Trash"
     reason: >-
       Items already moved to Trash by the user through Finder or another
-      application. Proposing them here still routes the removal through
-      wtff's own reversible staging area rather than a second, irreversible
-      deletion, so a mistaken selection can still be undone even though the
-      item was already discarded once.
+      application. Selecting them under "clean" still routes the removal
+      through wtff's own reversible staging area rather than a second,
+      irreversible deletion, so a mistaken selection can still be undone even
+      though the item was already discarded once.
+    purgeable: true
+    purge_reason: >-
+      The Trash is the one location in this catalog whose entire purpose is to
+      hold things the person has already decided to delete. Emptying it
+      completes an intent they expressed rather than forming a new one, which
+      is what "wtff purge" is for, and it is the same operation Finder offers
+      under the same name. Every other entry in this catalog is a cache that
+      wtff inferred was disposable, and an inference is what staging exists to
+      make reversible.
     provenance:
       source: "Directory presence confirmed on macOS running Darwin 25.6."
       method: system-inspection
