@@ -22,7 +22,7 @@ func TestActivityIndicatorTickReschedules(t *testing.T) {
 func TestActivityIndicatorIgnoresOtherMessages(t *testing.T) {
 	a := newActivityIndicator("Working")
 	before := a.view(brandTheme)
-	updated, cmd := a.update(planReadyMsg{})
+	updated, cmd := a.update(scanDoneMsg{})
 	if cmd != nil {
 		t.Fatalf("unrelated message produced a command: %v", cmd)
 	}

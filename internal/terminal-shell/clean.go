@@ -5,8 +5,10 @@ import (
 	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
 )
 
-func newCleanDiscoveringScreen(deps *Deps) Screen {
-	return newPlanDiscoveringScreen(deps, "Clean", cleanPlan)
+// startCleanFlow returns the first live block of the clean flow: a scan,
+// then selection, then staging, all through the shared blocks.
+func startCleanFlow(deps *Deps, theme Theme) liveBlock {
+	return newScanBlock(deps, theme, "clean", cleanPlan)
 }
 
 // cleanPlan discovers candidates from the catalog and plans their removal.

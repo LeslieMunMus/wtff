@@ -1,28 +1,50 @@
 package terminalshell
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	cleancatalog "github.com/lesliemusengi/wtff/internal/clean-catalog"
+	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
+	protectionrules "github.com/lesliemusengi/wtff/internal/protection-rules"
 )
 
-// stubScreen is a minimal Screen for exercising App's stack behavior in
-// isolation from any real flow's logic.
-type stubScreen struct {
-	title      string
-	updateFunc func(msg tea.Msg) (Screen, tea.Cmd)
+// testDeps builds a Deps rooted at an isolated home directory.
+//
+// Setting HOME is not optional: the deletion engine's default staging and
+// log paths always resolve against the real process environment, by design.
+// A test that set Deps.Home without also setting the environment variable
+// would still touch the real machine's staging area, which happened once
+// during development and left a real file staged on the developer's machine.
+func testDeps(t *testing.T, home string) *Deps {
+	t.Helper()
+	t.Setenv("HOME", home)
+	rules, err := protectionrules.LoadBuiltinForHome(home)
+	if err != nil {
+		t.Fatalf("loading rules: %v", err)
+	}
+	catalog, err := cleancatalog.LoadBuiltin()
+	if err != nil {
+		t.Fatalf("loading catalog: %v", err)
+	}
+	return &Deps{Home: home, Rules: rules, Catalog: catalog,
+		Log: operationlog.Discard(), Version: "test"}
 }
 
-func (s *stubScreen) Title() string { return s.title }
-func (s *stubScreen) Init() tea.Cmd { return nil }
-func (s *stubScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
-	if s.updateFunc != nil {
-		return s.updateFunc(msg)
+func writeTestFile(t *testing.T, path, contents string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("setup: %v", err)
 	}
-	return s, nil
+	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
 }
-func (s *stubScreen) View(theme Theme, width, height int) string { return s.title }
 
 func runCmd(t *testing.T, cmd tea.Cmd) tea.Msg {
 	t.Helper()
@@ -32,104 +54,323 @@ func runCmd(t *testing.T, cmd tea.Cmd) tea.Msg {
 	return cmd()
 }
 
-func TestAppPushAddsToStackAndEscPops(t *testing.T) {
-	root := &stubScreen{title: "root"}
-	app := NewApp(nil, true, root)
-
-	pushed := &stubScreen{title: "pushed"}
-	model, _ := app.Update(pushScreenMsg{screen: pushed})
-	app = model.(App)
-
-	if len(app.stack) != 2 || app.current().Title() != "pushed" {
-		t.Fatalf("stack after push = %+v", app.stack)
-	}
-
-	model, _ = app.Update(popScreenMsg{})
-	app = model.(App)
-	if len(app.stack) != 1 || app.current().Title() != "root" {
-		t.Fatalf("stack after pop = %+v", app.stack)
-	}
+// newTestApp returns a sized, ready App, since almost every behavior here
+// depends on the viewport existing.
+func newTestApp(t *testing.T, deps *Deps) App {
+	t.Helper()
+	app := NewApp(deps, true, nil)
+	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	return model.(App)
 }
 
-// Popping the last screen on the stack quits rather than leaving the
-// program with no current screen, which View already guards against, but
-// the popScreenMsg handler is the actual place that decision belongs.
-func TestAppPoppingLastScreenQuits(t *testing.T) {
-	app := NewApp(nil, true, &stubScreen{title: "root"})
-	model, cmd := app.Update(popScreenMsg{})
-	app = model.(App)
-	if !app.quitting {
-		t.Fatal("popping the last screen should set quitting")
-	}
-	if cmd == nil {
-		t.Fatal("popping the last screen should return tea.Quit")
-	}
-}
-
-func TestAppCtrlCQuitsRegardlessOfStackDepth(t *testing.T) {
-	app := NewApp(nil, true, &stubScreen{title: "root"})
-	model, _ := app.Update(pushScreenMsg{screen: &stubScreen{title: "deep"}})
-	app = model.(App)
-	model, _ = app.Update(pushScreenMsg{screen: &stubScreen{title: "deeper"}})
-	app = model.(App)
-
-	model, cmd := app.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
-	app = model.(App)
-	if !app.quitting || cmd == nil {
-		t.Fatal("ctrl+c should quit regardless of stack depth")
-	}
-}
-
-// This is the behavior resultsScreen relies on: discard everything except
-// the root screen, not just one level.
-func TestAppResetToMenuTruncatesToRoot(t *testing.T) {
-	app := NewApp(nil, true, &stubScreen{title: "root"})
-	for _, title := range []string{"a", "b", "c"} {
-		model, _ := app.Update(pushScreenMsg{screen: &stubScreen{title: title}})
+func typeInto(app App, text string) App {
+	for _, r := range text {
+		model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 		app = model.(App)
 	}
-	if len(app.stack) != 4 {
-		t.Fatalf("setup: stack depth = %d, want 4", len(app.stack))
-	}
+	return app
+}
 
-	model, _ := app.Update(resetToMenuMsg{})
-	app = model.(App)
-	if len(app.stack) != 1 || app.current().Title() != "root" {
-		t.Fatalf("stack after reset = %+v", app.stack)
+func pressEnter(app App) (App, tea.Cmd) {
+	model, cmd := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	return model.(App), cmd
+}
+
+func transcriptText(app App) string {
+	var b strings.Builder
+	for _, entry := range app.entries {
+		b.WriteString(entry.render(app.theme))
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// The core of the approved design: running a command must not replace the
+// view. The prompt stays, the transcript grows, and history is preserved.
+func TestRunningACommandKeepsThePromptAndGrowsTheTranscript(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
+
+	before := len(app.entries)
+	app = typeInto(app, "staged")
+	app, cmd := pressEnter(app)
+
+	if len(app.entries) <= before {
+		t.Fatal("running a command should append to the transcript")
+	}
+	if !strings.Contains(transcriptText(app), "staged") {
+		t.Fatal("the transcript should echo the typed command")
+	}
+	if !strings.Contains(app.View(), "❯") {
+		t.Fatal("the prompt must remain visible while a command runs")
+	}
+	if cmd == nil {
+		t.Fatal("a command should start a flow")
 	}
 }
 
-// A key event must reach the screen that is actually on top of the stack,
-// not the root, and the screen's own returned replacement must become the
-// new top of stack.
-func TestAppDispatchesToTopOfStackAndAppliesReplacement(t *testing.T) {
-	replaced := &stubScreen{title: "replaced"}
-	top := &stubScreen{title: "top", updateFunc: func(tea.Msg) (Screen, tea.Cmd) {
-		return replaced, nil
-	}}
-	root := &stubScreen{title: "root", updateFunc: func(tea.Msg) (Screen, tea.Cmd) {
-		t.Fatal("root should not receive updates while a screen is stacked above it")
-		return nil, nil
-	}}
+// The welcome box is the first transcript entry, so it scrolls away with
+// history instead of permanently occupying the viewport.
+func TestWelcomeIsTheFirstTranscriptEntry(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
 
-	app := NewApp(nil, true, root)
-	model, _ := app.Update(pushScreenMsg{screen: top})
-	app = model.(App)
-
-	model, _ = app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
-	app = model.(App)
-	if app.current().Title() != "replaced" {
-		t.Fatalf("current screen = %q, want replaced", app.current().Title())
+	if len(app.entries) != 1 {
+		t.Fatalf("expected exactly the welcome entry, got %d", len(app.entries))
 	}
-	if len(app.stack) != 2 {
-		t.Fatalf("replacement should not change stack depth, got %d", len(app.stack))
+	if !strings.Contains(app.entries[0].render(app.theme), "Welcome to wtff") {
+		t.Fatal("the first entry should be the welcome box")
 	}
 }
 
-// The palette is the supplied brand specification, single and explicit, so
-// theme detection returns it regardless of the terminal background. This
-// pins the mapping the specification dictates: the main color carries the
-// accent and every border, and the highlight color backs selected rows.
+// Exact, case-sensitive matching: a person typing something means exactly
+// what they typed.
+func TestWrongCaseIsRejectedIntoTheTranscript(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
+
+	app = typeInto(app, "Clean")
+	app, cmd := pressEnter(app)
+
+	if cmd != nil {
+		t.Fatal("a wrong-case command must not start a flow")
+	}
+	if app.block != nil {
+		t.Fatal("a wrong-case command must not pin a live block")
+	}
+	text := transcriptText(app)
+	if !strings.Contains(text, "unknown command") || !strings.Contains(text, "Clean") {
+		t.Fatalf("the transcript should record the rejection and what was typed: %q", text)
+	}
+}
+
+func TestUnknownCommandIsRejectedIntoTheTranscript(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
+	app = typeInto(app, "banana")
+	app, cmd := pressEnter(app)
+
+	if cmd != nil || app.block != nil {
+		t.Fatal("an unknown command must not run anything")
+	}
+	if !strings.Contains(transcriptText(app), "unknown command") {
+		t.Fatal("the transcript should record the rejection")
+	}
+}
+
+// Only uninstall takes an argument; everything else with trailing text is
+// refused rather than silently ignoring the extra words.
+func TestArgumentsAreRefusedForCommandsThatTakeNone(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
+	app = typeInto(app, "clean now")
+	app, cmd := pressEnter(app)
+
+	if cmd != nil || app.block != nil {
+		t.Fatal("a command with an unexpected argument must not run")
+	}
+	if !strings.Contains(transcriptText(app), "takes no arguments") {
+		t.Fatal("the transcript should explain the refusal")
+	}
+}
+
+func TestUninstallAcceptsItsArgument(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
+	app = typeInto(app, "uninstall SomeApp")
+	app, cmd := pressEnter(app)
+
+	if cmd == nil || app.block == nil {
+		t.Fatal("uninstall with an argument should start a flow")
+	}
+	if _, ok := app.block.(*resolveBlock); !ok {
+		t.Fatalf("expected a resolve block, got %T", app.block)
+	}
+}
+
+func TestBareUninstallAsksForAName(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
+	app = typeInto(app, "uninstall")
+	app, _ = pressEnter(app)
+
+	if _, ok := app.block.(*nameQueryBlock); !ok {
+		t.Fatalf("expected a name query block, got %T", app.block)
+	}
+}
+
+func TestHelpWritesToTheTranscriptWithoutAFlow(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
+	app = typeInto(app, "help")
+	app, cmd := pressEnter(app)
+
+	if cmd != nil || app.block != nil {
+		t.Fatal("help should not start a flow")
+	}
+	text := transcriptText(app)
+	for _, c := range homeCommands {
+		if !strings.Contains(text, c.name) {
+			t.Fatalf("help output missing command %q", c.name)
+		}
+	}
+}
+
+func TestQuitExits(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
+	app = typeInto(app, "quit")
+	app, cmd := pressEnter(app)
+
+	if !app.quitting {
+		t.Fatal("quit should set quitting")
+	}
+	if _, ok := runCmd(t, cmd).(tea.QuitMsg); !ok {
+		t.Fatal("quit should return tea.Quit")
+	}
+}
+
+func TestCtrlCQuitsEvenWithAFlowRunning(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
+	app = typeInto(app, "clean")
+	app, _ = pressEnter(app)
+	if app.block == nil {
+		t.Fatal("setup: expected a running flow")
+	}
+
+	model, cmd := app.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if !model.(App).quitting || cmd == nil {
+		t.Fatal("ctrl+c must quit even while a flow is running")
+	}
+}
+
+// A running block owns the keyboard, so ordinary keys reach the interactive
+// step rather than the prompt behind it.
+func TestKeysReachTheLiveBlockWhileAFlowRuns(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
+	app = typeInto(app, "uninstall")
+	app, _ = pressEnter(app)
+
+	app = typeInto(app, "abc")
+	block, ok := app.block.(*nameQueryBlock)
+	if !ok {
+		t.Fatalf("expected the name query block, got %T", app.block)
+	}
+	if block.input.Value() != "abc" {
+		t.Fatalf("the live block should have received the keys, got %q", block.input.Value())
+	}
+	if app.input.Value() != "" {
+		t.Fatal("the prompt must not receive keys while a block is live")
+	}
+}
+
+// flowMsg is the single mechanism a flow uses to append history and swap
+// the pinned block; a nil block means the flow is over.
+func TestFlowMsgAppendsEntriesAndClearsTheBlock(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
+	app = typeInto(app, "clean")
+	app, _ = pressEnter(app)
+	if app.block == nil {
+		t.Fatal("setup: expected a running flow")
+	}
+
+	model, _ := app.Update(flowMsg{
+		entries:  []transcriptEntry{infoEntry(app.theme, "done here")},
+		setBlock: true,
+		block:    nil,
+	})
+	app = model.(App)
+
+	if app.block != nil {
+		t.Fatal("a nil block in flowMsg should end the flow")
+	}
+	if !strings.Contains(transcriptText(app), "done here") {
+		t.Fatal("flowMsg entries should be appended to the transcript")
+	}
+}
+
+// The disclosure toggle keeps verbose output one keypress away without
+// cluttering the viewport by default.
+func TestCtrlOTogglesTheNewestDisclosure(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
+	app.entries = append(app.entries,
+		successEntry(app.theme, "staged 2 items", "staged  /a", "staged  /b"))
+
+	if strings.Contains(transcriptText(app), "/a") {
+		t.Fatal("details should be collapsed by default")
+	}
+
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
+	app = model.(App)
+	if !strings.Contains(transcriptText(app), "/a") {
+		t.Fatal("ctrl+o should expand the newest disclosure")
+	}
+
+	model, _ = app.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
+	app = model.(App)
+	if strings.Contains(transcriptText(app), "/a") {
+		t.Fatal("ctrl+o should collapse it again")
+	}
+}
+
+func TestSlashOpensThePaletteAndFilters(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
+
+	app = typeInto(app, "/")
+	if !app.paletteActive {
+		t.Fatal("typing / should open the palette")
+	}
+	app = typeInto(app, "un")
+	filtered := filterCommands(strings.TrimPrefix(app.input.Value(), "/"))
+	if len(filtered) != 1 || filtered[0].name != "uninstall" {
+		t.Fatalf("palette filtering wrong: %+v", filtered)
+	}
+}
+
+func TestPaletteEnterRunsTheHighlightedCommand(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
+	app = typeInto(app, "/staged")
+	app, cmd := pressEnter(app)
+
+	if cmd == nil || app.block == nil {
+		t.Fatal("palette enter should start the highlighted command")
+	}
+	if app.paletteActive {
+		t.Fatal("running from the palette should close it")
+	}
+}
+
+func TestPaletteEscapeClears(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
+	app = typeInto(app, "/cl")
+
+	model, _ := app.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	app = model.(App)
+	if app.paletteActive || app.input.Value() != "" {
+		t.Fatal("escape should close the palette and clear the input")
+	}
+}
+
+// Every command must be dispatchable: the missing-handler omission happened
+// once already during development.
+func TestEveryCommandHasAHandler(t *testing.T) {
+	for _, c := range homeCommands {
+		if c.name == "quit" || c.name == "help" {
+			continue
+		}
+		if c.start == nil {
+			t.Errorf("command %q has no start function", c.name)
+		}
+	}
+}
+
 func TestDetectThemeReturnsTheBrandPalette(t *testing.T) {
 	for _, dark := range []bool{true, false} {
 		got := detectTheme(dark)
