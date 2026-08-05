@@ -6,10 +6,12 @@ cleanup tool, and it does not reuse code, comments, or curated data from any oth
 
 ## Status
 
-The safety core is built and tested, and is now reachable from a real terminal command.
+The safety core, every planned command, and the full-screen interactive shell are built and
+tested.
 
 ```bash
 go build -o wtff ./cmd/wtff
+./wtff                                              # full-screen interactive shell
 ./wtff clean --dry-run                              # preview reclaimable caches, changes nothing
 ./wtff clean                                        # stages them, reversible
 ./wtff uninstall --dry-run "App Name"               # preview an app and its leftovers
@@ -23,16 +25,18 @@ go build -o wtff ./cmd/wtff
 Implemented: structural path validation, the deletion engine with plan and apply, staging based
 undo, the operation log, the protection rule schema with an initial rule set, a candidate
 discovery catalog for common cache categories, application discovery and exact-evidence leftover
-matching, and `clean`, `uninstall`, and `remove` commands that exercise all of it end to end.
+matching, `clean`, `uninstall`, and `remove` commands that exercise all of it end to end, and a
+full-screen interactive shell covering Clean, Uninstall, and Staged as an alternative to the
+scriptable commands.
 
-Not yet built: the full-screen terminal interface. `uninstall` matches by exact name or bundle
-identifier only, refuses Apple's own applications outright, and has no vendor-specific protected
-list yet for software such as VPN clients or endpoint security agents.
+`uninstall` matches by exact name or bundle identifier only, refuses Apple's own applications
+outright, and has no vendor-specific protected list yet for software such as VPN clients or
+endpoint security agents. The interactive shell only stages, reversibly; a permanent purge is
+available from the scriptable commands with `--purge`, not from the shell.
 
 See `docs/decisions/` for a numbered record of what was decided and why, and
-`docs/architecture/` for how the pieces fit together. Packages that are implemented document
-themselves in their own `doc.go`; the remaining `README.md` files mark packages that are still
-placeholders.
+`docs/architecture/` for how the pieces fit together. Every package documents itself in its own
+`doc.go`.
 
 ## Scope for version one
 

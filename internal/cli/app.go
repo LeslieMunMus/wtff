@@ -4,7 +4,42 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/charmbracelet/lipgloss"
+
+	terminalshell "github.com/lesliemusengi/wtff/internal/terminal-shell"
 )
+
+// detectDarkBackground asks the terminal whether it has a dark background.
+//
+// This is a direct call, deliberately not wrapped in a timeout. An earlier
+// version raced lipgloss.HasDarkBackground against a short deadline,
+// intending to bound the worst case; that protected nothing. Bubble Tea's
+// own package init function, in bubbletea's own source, unconditionally
+// calls this exact same detection against the real os.Stdin and os.Stdout
+// before any code in this program runs at all, specifically so that Lip
+// Gloss's result is cached before a Program acquires the terminal. By the
+// time this function executes, the detection has already happened and its
+// result is cached; racing it again here only re-reads that cache, and a
+// timeout on a cache read protects against nothing real.
+//
+// The actual risk this looked like it was guarding against is real, just
+// not fixable from here. Confirmed directly: running the compiled binary
+// under a pseudo-terminal that never answers the query left the program
+// producing no output for the full five seconds termenv allows before
+// giving up, which happens during Go's init phase, before main runs, and
+// cannot be intercepted, bounded, or canceled by anything downstream of
+// Bubble Tea. Confirmed the other direction too: under a pseudo-terminal
+// that answers correctly, the same binary renders its first full frame in
+// under 25 milliseconds. The five second case is real for an environment
+// with a pty but no terminal emulator behind it, such as some CI runners;
+// it is not a risk for an actual interactive terminal session, which is
+// what this program is built to run in. Bubble Tea's own comment on the
+// workaround says it will be removed in v2; this note should be revisited
+// then.
+func detectDarkBackground() bool {
+	return lipgloss.HasDarkBackground()
+}
 
 // Version is wtff's version string. There is no released version yet; this
 // value exists so every build reports something rather than an empty string.
@@ -18,6 +53,14 @@ const Version = "0.1.0-dev"
 // capturing its output instead of letting it print directly.
 func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
+		if isInteractive(stdin) {
+			return runShell(stdin, stdout, stderr)
+		}
+		// A non-interactive session (piped input, a script, CI) has no way to
+		// drive a full-screen program, and Bubble Tea's own attempt to enter
+		// raw terminal mode against something that is not a terminal is not a
+		// graceful failure to rely on. Usage text is the honest answer here,
+		// the same one an unrecognized command gets.
 		printUsage(stdout)
 		return 2
 	}
@@ -44,6 +87,24 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		printUsage(stderr)
 		return 2
 	}
+}
+
+// runShell launches the full-screen interactive shell. It requires stdin to
+// be a real terminal file, which the caller must already have checked, since
+// there is no meaningful way to run a full-screen program against a pipe.
+func runShell(stdin io.Reader, stdout, stderr io.Writer) int {
+	deps, err := terminalshell.NewDeps()
+	if err != nil {
+		fmt.Fprintln(stderr, "wtff: cannot start:", err)
+		return 1
+	}
+	defer deps.Close()
+
+	if err := terminalshell.Run(deps, detectDarkBackground(), stdin, stdout); err != nil {
+		fmt.Fprintln(stderr, "wtff:", err)
+		return 1
+	}
+	return 0
 }
 
 func printUsage(w io.Writer) {
