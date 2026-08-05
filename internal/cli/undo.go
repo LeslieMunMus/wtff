@@ -27,7 +27,7 @@ func validateBatchID(id string) error {
 func runUndo(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("undo", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(args, commonBoolFlags)); err != nil {
 		return 2
 	}
 	remaining := fs.Args()

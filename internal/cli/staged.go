@@ -11,7 +11,7 @@ import (
 func runStaged(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("staged", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(args, commonBoolFlags)); err != nil {
 		return 2
 	}
 

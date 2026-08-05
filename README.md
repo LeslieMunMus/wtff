@@ -12,6 +12,8 @@ The safety core is built and tested, and is now reachable from a real terminal c
 go build -o wtff ./cmd/wtff
 ./wtff clean --dry-run                              # preview reclaimable caches, changes nothing
 ./wtff clean                                        # stages them, reversible
+./wtff uninstall --dry-run "App Name"               # preview an app and its leftovers
+./wtff uninstall "App Name"                         # stages it, reversible
 ./wtff remove --dry-run ~/Library/Caches/some-app   # preview a specific path
 ./wtff remove ~/Library/Caches/some-app             # stages it, reversible
 ./wtff staged                                       # list what is staged
@@ -20,12 +22,12 @@ go build -o wtff ./cmd/wtff
 
 Implemented: structural path validation, the deletion engine with plan and apply, staging based
 undo, the operation log, the protection rule schema with an initial rule set, a candidate
-discovery catalog for common cache categories, and `clean` and `remove` commands that exercise
-all of it end to end.
+discovery catalog for common cache categories, application discovery and exact-evidence leftover
+matching, and `clean`, `uninstall`, and `remove` commands that exercise all of it end to end.
 
-Not yet built: the full-screen terminal interface and the `uninstall` command. `clean`'s catalog
-covers application caches, developer tool caches, and Trash; it does not yet know about
-installed applications or their leftovers.
+Not yet built: the full-screen terminal interface. `uninstall` matches by exact name or bundle
+identifier only, refuses Apple's own applications outright, and has no vendor-specific protected
+list yet for software such as VPN clients or endpoint security agents.
 
 See `docs/decisions/` for a numbered record of what was decided and why, and
 `docs/architecture/` for how the pieces fit together. Packages that are implemented document

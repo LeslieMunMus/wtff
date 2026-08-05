@@ -33,7 +33,7 @@ func runRemove(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	dryRun := fs.Bool("dry-run", false, "show what would happen without changing anything")
 	purge := fs.Bool("purge", false, "remove permanently instead of staging for undo")
 	yes := fs.Bool("yes", false, "proceed without an interactive confirmation")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlagsFirst(args, commonBoolFlags)); err != nil {
 		return 2
 	}
 	targets := fs.Args()

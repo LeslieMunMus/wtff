@@ -27,6 +27,8 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runClean(args[1:], stdin, stdout, stderr)
 	case "remove":
 		return runRemove(args[1:], stdin, stdout, stderr)
+	case "uninstall":
+		return runUninstall(args[1:], stdin, stdout, stderr)
 	case "undo":
 		return runUndo(args[1:], stdin, stdout, stderr)
 	case "staged":
@@ -53,6 +55,11 @@ Usage:
       application caches, developer tool caches, and Trash contents. Staged
       by default. Skips anything covered by a protection rule, or that this
       machine simply does not have.
+
+  wtff uninstall [--dry-run] [--purge] [--yes] <app name or bundle id>
+      Remove an installed application and its leftover data, matched by an
+      exact name or bundle identifier. Staged by default. Refuses Apple's
+      own applications regardless of where they are installed.
 
   wtff remove [--dry-run] [--purge] [--yes] <path>...
       Remove one or more paths. Staged by default, which is reversible
