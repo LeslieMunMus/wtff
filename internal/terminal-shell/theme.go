@@ -7,55 +7,71 @@ import (
 // Theme holds every color the shell uses, resolved once at startup rather
 // than recomputed per render.
 //
-// Lip Gloss downsamples a declared color to whatever the terminal actually
-// supports, ANSI 16, ANSI 256, or true color, using the same terminal
-// capability detection termenv performs elsewhere in the Bubble Tea
-// ecosystem. Colors are declared here as if true color were always
-// available; correctness on a more limited terminal is Lip Gloss's job, not
-// this package's.
+// The values are the supplied brand palette, applied as directed: the main
+// color carries every border, divider, heading, command name, and the
+// prompt; body text carries sentences and descriptions; the secondary color
+// carries hints and de-emphasized detail; the highlight color is the
+// background of a selected row.
 type Theme struct {
-	Accent    lipgloss.Color
-	Muted     lipgloss.Color
-	Success   lipgloss.Color
-	Warning   lipgloss.Color
-	Danger    lipgloss.Color
-	Border    lipgloss.Color
+	// Accent is the main brand color: all lines, borders, headings, command
+	// names, the prompt, and the spinner.
+	Accent lipgloss.Color
+
+	// Body is the reading-text color for sentences and descriptions.
+	Body lipgloss.Color
+
+	// Muted is the secondary color, for hints, timers, and detail a person
+	// scans past rather than reads.
+	Muted lipgloss.Color
+
+	// Success and Danger are outcome colors. Success comes from the supplied
+	// palette. Danger was not specified; #AE0A0A follows the palette's own
+	// pattern, the main color's digits rotated the same way the supplied
+	// green is, and stands until the project manager picks otherwise.
+	Success lipgloss.Color
+	Danger  lipgloss.Color
+
+	// Warning is used for partial outcomes, such as a restore that skipped
+	// items. Not in the supplied palette; flagged for a decision, amber
+	// meanwhile.
+	Warning lipgloss.Color
+
+	// Border duplicates Accent by instruction: all lines and borders use the
+	// main color. Kept as its own field so call sites read as intent.
+	Border lipgloss.Color
+
+	// Highlight is the selected-row background.
 	Highlight lipgloss.Color
 }
 
-// darkTheme and lightTheme are the two fixed palettes. Only two are offered,
-// not a configurable accent or contrast level: the terminal already carries
-// the user's own foreground and background choice, and wtff's job is to
-// pick colors that read clearly against either, not to reproduce a GUI
-// app's theme settings panel inside a terminal that already has one.
-var (
-	darkTheme = Theme{
-		Accent:    lipgloss.Color("#5EA1F2"),
-		Muted:     lipgloss.Color("#8A8F98"),
-		Success:   lipgloss.Color("#59D499"),
-		Warning:   lipgloss.Color("#E8B339"),
-		Danger:    lipgloss.Color("#F2555A"),
-		Border:    lipgloss.Color("#3A3D42"),
-		Highlight: lipgloss.Color("#2A2D33"),
-	}
+// brandTheme is the single palette, per the supplied theme specification.
+//
+// The specification also names #F5F5F5 as the background. The shell
+// deliberately does not paint the terminal background: filling every cell
+// fights the user's own terminal profile, breaks on resize, and the
+// specification's background is best honored by running in a terminal
+// profile with that background, which the reporting terminal already has.
+// Foregrounds, borders, and the row highlight are where the palette is
+// enforced from inside the program.
+var brandTheme = Theme{
+	Accent:    lipgloss.Color("#0A0AAE"),
+	Body:      lipgloss.Color("#3D3D3D"),
+	Muted:     lipgloss.Color("#BCBCFB"),
+	Success:   lipgloss.Color("#0AAE0A"),
+	Danger:    lipgloss.Color("#AE0A0A"),
+	Warning:   lipgloss.Color("#9A6700"),
+	Border:    lipgloss.Color("#0A0AAE"),
+	Highlight: lipgloss.Color("#E1E1FD"),
+}
 
-	lightTheme = Theme{
-		Accent:    lipgloss.Color("#1F6FEB"),
-		Muted:     lipgloss.Color("#6E7581"),
-		Success:   lipgloss.Color("#1A7F4E"),
-		Warning:   lipgloss.Color("#9A6700"),
-		Danger:    lipgloss.Color("#CF222E"),
-		Border:    lipgloss.Color("#D0D7DE"),
-		Highlight: lipgloss.Color("#EEF2F6"),
-	}
-)
-
-// detectTheme picks a palette based on the terminal's own reported
-// background. hasDarkBackground is injected rather than called directly
-// here so theme selection is testable without a real terminal.
-func detectTheme(hasDarkBackground bool) Theme {
-	if hasDarkBackground {
-		return darkTheme
-	}
-	return lightTheme
+// detectTheme now returns the brand palette unconditionally. The earlier
+// dark and light pair is gone: the supplied palette is explicit and single,
+// and honoring it beats adapting it. The known cost, recorded rather than
+// hidden: on a dark-background terminal, #3D3D3D body text will read
+// poorly. The palette is a light-background design, and a dark variant is a
+// decision for the palette's owner, not something to improvise here. The
+// parameter is kept so call sites and the startup detection path stay
+// unchanged for when that variant exists.
+func detectTheme(_ bool) Theme {
+	return brandTheme
 }

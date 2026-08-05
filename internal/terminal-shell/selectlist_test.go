@@ -117,7 +117,7 @@ func TestSelectListEmptyDoesNotPanic(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("expected no command from an empty list")
 	}
-	_ = l.view(darkTheme, 80, 20)
+	_ = l.view(brandTheme, 80, 20)
 }
 
 // Scrolling must keep the cursor visible within a bounded viewport. This is

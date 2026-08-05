@@ -6,28 +6,28 @@ import (
 	"time"
 )
 
-func TestActivityIndicatorTicksAdvanceFrameCount(t *testing.T) {
+// The spinner must reschedule its own next tick, or the animation runs for
+// exactly one frame and stops.
+func TestActivityIndicatorTickReschedules(t *testing.T) {
 	a := newActivityIndicator("Working")
-	if a.ticks != 0 {
-		t.Fatalf("ticks = %d, want 0 at construction", a.ticks)
-	}
-	updated, cmd := a.update(activityTickMsg{})
-	if updated.ticks != 1 {
-		t.Fatalf("ticks after one update = %d, want 1", updated.ticks)
-	}
+	_, cmd := a.update(a.spin.Tick())
 	if cmd == nil {
-		t.Fatal("update should reschedule the next tick")
+		t.Fatal("a tick should reschedule the next tick")
 	}
 }
 
-// Anything other than its own tick message must be a no-op, so a caller can
-// route every message through it unconditionally, the same contract
-// selectList's update already follows.
+// Anything other than the spinner's own tick message must be a no-op, so a
+// caller can route every message through it unconditionally, the same
+// contract selectList's update already follows.
 func TestActivityIndicatorIgnoresOtherMessages(t *testing.T) {
 	a := newActivityIndicator("Working")
+	before := a.view(brandTheme)
 	updated, cmd := a.update(planReadyMsg{})
-	if updated.ticks != 0 || cmd != nil {
-		t.Fatalf("unrelated message changed state: ticks=%d cmd=%v", updated.ticks, cmd)
+	if cmd != nil {
+		t.Fatalf("unrelated message produced a command: %v", cmd)
+	}
+	if updated.view(brandTheme) != before {
+		t.Fatal("unrelated message changed the rendered state")
 	}
 }
 
@@ -38,7 +38,7 @@ func TestActivityIndicatorIgnoresOtherMessages(t *testing.T) {
 func TestActivityIndicatorViewShowsLabelAndElapsed(t *testing.T) {
 	a := newActivityIndicator("Scanning")
 	a.startedAt = time.Now().Add(-90 * time.Second)
-	view := a.view(darkTheme)
+	view := a.view(brandTheme)
 	if !strings.Contains(view, "Scanning") {
 		t.Fatal("view should show the label")
 	}
@@ -53,18 +53,20 @@ func TestActivityIndicatorViewShowsLabelAndElapsed(t *testing.T) {
 // reference, a single compact status line. This pins the corrected shape.
 func TestActivityIndicatorViewIsASingleLine(t *testing.T) {
 	a := newActivityIndicator("Scanning")
-	if strings.Contains(a.view(darkTheme), "\n") {
+	if strings.Contains(a.view(brandTheme), "\n") {
 		t.Fatal("the activity indicator must render as a single line")
 	}
 }
 
 // The spinner glyph must change across ticks, or the line is a static
-// string again, indistinguishable from a hang.
+// string again, indistinguishable from a hang. Driven through the spinner
+// component's own tick message, the same way the real event loop drives it,
+// rather than by poking internal state.
 func TestActivityIndicatorGlyphAnimatesAcrossTicks(t *testing.T) {
 	a := newActivityIndicator("Scanning")
-	first := a.view(darkTheme)
-	a.ticks++
-	second := a.view(darkTheme)
+	first := a.view(brandTheme)
+	a, _ = a.update(a.spin.Tick())
+	second := a.view(brandTheme)
 	if first == second {
 		t.Fatal("consecutive ticks should render different spinner frames")
 	}

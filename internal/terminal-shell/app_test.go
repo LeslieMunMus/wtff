@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // stubScreen is a minimal Screen for exercising App's stack behavior in
@@ -125,11 +126,27 @@ func TestAppDispatchesToTopOfStackAndAppliesReplacement(t *testing.T) {
 	}
 }
 
-func TestDetectThemeSelectsCorrectPalette(t *testing.T) {
-	if got := detectTheme(true); got.Accent != darkTheme.Accent {
-		t.Fatal("dark background did not select the dark theme")
-	}
-	if got := detectTheme(false); got.Accent != lightTheme.Accent {
-		t.Fatal("light background did not select the light theme")
+// The palette is the supplied brand specification, single and explicit, so
+// theme detection returns it regardless of the terminal background. This
+// pins the mapping the specification dictates: the main color carries the
+// accent and every border, and the highlight color backs selected rows.
+func TestDetectThemeReturnsTheBrandPalette(t *testing.T) {
+	for _, dark := range []bool{true, false} {
+		got := detectTheme(dark)
+		if got.Accent != lipgloss.Color("#0A0AAE") {
+			t.Fatalf("accent = %v, want the brand main color", got.Accent)
+		}
+		if got.Border != got.Accent {
+			t.Fatal("borders must use the main color, per the theme specification")
+		}
+		if got.Body != lipgloss.Color("#3D3D3D") {
+			t.Fatalf("body = %v, want the brand body color", got.Body)
+		}
+		if got.Highlight != lipgloss.Color("#E1E1FD") {
+			t.Fatalf("highlight = %v, want the brand highlight color", got.Highlight)
+		}
+		if got.Success != lipgloss.Color("#0AAE0A") {
+			t.Fatalf("success = %v, want the brand success color", got.Success)
+		}
 	}
 }

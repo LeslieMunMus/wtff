@@ -238,15 +238,19 @@ func (h *homeScreen) renderWelcomeBox(theme Theme, width int) string {
 	}
 
 	muted := lipgloss.NewStyle().Foreground(theme.Muted)
+	body := lipgloss.NewStyle().Foreground(theme.Body)
 	accent := lipgloss.NewStyle().Foreground(theme.Accent).Bold(true)
 
+	// The mark is deliberately absent. The terminal rendition of the logo
+	// was rejected twice; until an approved terminal-legible version of the
+	// mark exists, the left column is text only.
 	left := lipgloss.NewStyle().Width(leftWidth).Align(lipgloss.Center).Render(
 		lipgloss.JoinVertical(lipgloss.Center,
-			lipgloss.NewStyle().Bold(true).Render("Welcome to wtff"),
+			accent.Render("Welcome to wtff"),
 			"",
-			logoFrame(0),
+			body.Render("A terminal-first macOS"),
+			body.Render("maintenance toolkit"),
 			"",
-			muted.Render("A terminal-first macOS maintenance toolkit"),
 			muted.Render(h.deps.Home),
 		))
 
@@ -254,21 +258,21 @@ func (h *homeScreen) renderWelcomeBox(theme Theme, width int) string {
 	for _, c := range homeCommands {
 		commandRows = append(commandRows,
 			lipgloss.NewStyle().Foreground(theme.Accent).Render(c.name)+
-				muted.Render("  "+c.description))
+				body.Render("  "+c.description))
 	}
 
 	right := lipgloss.NewStyle().Width(rightWidth).PaddingLeft(2).Render(
 		lipgloss.JoinVertical(lipgloss.Left,
 			accent.Render("Getting started"),
-			"Type a command and press Enter. Commands are exact, lowercase words.",
-			"Type / to browse and filter this list instead.",
-			muted.Render(strings.Repeat("─", rightWidth-2)),
+			body.Render("Type a command and press Enter. Commands are exact, lowercase words."),
+			body.Render("Type / to browse and filter this list instead."),
+			lipgloss.NewStyle().Foreground(theme.Border).Render(strings.Repeat("─", rightWidth-2)),
 			accent.Render("Commands"),
 			lipgloss.JoinVertical(lipgloss.Left, commandRows...),
 		))
 
-	body := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
-	return renderTitledBox(theme, "wtff "+h.deps.Version, body, width)
+	columns := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	return renderTitledBox(theme, "wtff "+h.deps.Version, columns, width)
 }
 
 // renderNoteLine sits under the box: the current error when there is one,
@@ -277,8 +281,9 @@ func (h *homeScreen) renderNoteLine(theme Theme) string {
 	if h.errorMsg != "" {
 		return lipgloss.NewStyle().Foreground(theme.Danger).Render("▌ " + h.errorMsg)
 	}
-	return lipgloss.NewStyle().Foreground(theme.Muted).
-		Render("▌ Removals are staged and reversible. Nothing is deleted permanently without --purge.")
+	return lipgloss.NewStyle().Foreground(theme.Accent).Render("▌ ") +
+		lipgloss.NewStyle().Foreground(theme.Body).
+			Render("Removals are staged and reversible. Nothing is deleted permanently without --purge.")
 }
 
 // renderPromptBlock is the bottom-anchored band: the palette when active,
@@ -309,16 +314,18 @@ func (h *homeScreen) renderPalette(theme Theme) string {
 		return lipgloss.NewStyle().Foreground(theme.Muted).Render("no matching command")
 	}
 
-	muted := lipgloss.NewStyle().Foreground(theme.Muted)
+	body := lipgloss.NewStyle().Foreground(theme.Body)
 	var rows []string
 	for i, c := range list {
 		nameStyle := lipgloss.NewStyle().Foreground(theme.Accent)
+		rowStyle := lipgloss.NewStyle()
 		prefix := "  "
 		if i == h.paletteCursor {
 			prefix = "> "
 			nameStyle = nameStyle.Bold(true)
+			rowStyle = rowStyle.Background(theme.Highlight)
 		}
-		rows = append(rows, prefix+nameStyle.Render(c.name)+muted.Render("  "+c.description))
+		rows = append(rows, rowStyle.Render(prefix+nameStyle.Render(c.name)+body.Render("  "+c.description)))
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
 }

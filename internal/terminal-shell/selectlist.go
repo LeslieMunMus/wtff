@@ -181,7 +181,7 @@ func (l selectList) renderRow(theme Theme, index int, width int) string {
 	}
 
 	prefix := "  "
-	rowStyle := lipgloss.NewStyle()
+	rowStyle := lipgloss.NewStyle().Foreground(theme.Body)
 	if index == l.cursor {
 		prefix = "> "
 		rowStyle = rowStyle.Background(theme.Highlight)
