@@ -70,10 +70,12 @@ func filterCommands(prefix string) []command {
 }
 
 // homeScreen is wtff's landing screen: a typed command prompt, replacing an
-// earlier arrow-key menu entirely. Every available command is listed as
-// visible reference text below the prompt at all times; typing "/" moves
-// into an interactive filtered selection over that same list, for someone
-// who would rather narrow and pick than type the full word from memory.
+// earlier arrow-key menu entirely. The layout follows the reference the
+// project manager supplied in mood-board/claude-welcome-menu.png: a
+// full-width header box with the program name embedded in its top border,
+// a two-column interior, welcome and mark on the left, orientation and the
+// command list on the right, and the prompt anchored at the bottom of the
+// screen rather than floating in the middle of it.
 type homeScreen struct {
 	deps  *Deps
 	input textinput.Model
@@ -87,6 +89,7 @@ type homeScreen struct {
 func newHomeScreen(deps *Deps) *homeScreen {
 	input := textinput.New()
 	input.Placeholder = "type a command, or / to browse"
+	input.Prompt = "❯ "
 	input.Focus()
 	input.CharLimit = 64
 	return &homeScreen{deps: deps, input: input}
@@ -197,87 +200,159 @@ func (h *homeScreen) dispatch(rawName string) (Screen, tea.Cmd) {
 	}
 }
 
+// View lays the screen out in three bands: the welcome box at the top, a
+// filler region, and the prompt block anchored at the bottom, matching the
+// supplied reference. Horizontal padding is applied per band rather than
+// wrapping the whole screen, because the filler between the bands is raw
+// newlines and must not carry padding-induced width.
 func (h *homeScreen) View(theme Theme, width, height int) string {
-	panelWidth := min(width-4, 58)
-	welcome := h.renderWelcomePanel(theme, panelWidth)
+	innerWidth := width - 4
+	if innerWidth < 40 {
+		innerWidth = 40
+	}
+	pad := lipgloss.NewStyle().Padding(0, 2)
 
-	prompt := lipgloss.NewStyle().
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(theme.Border).
-		Padding(0, 1).
-		Width(min(width-6, 60)).
-		Render(h.input.View())
+	top := pad.Render(lipgloss.JoinVertical(lipgloss.Left,
+		h.renderWelcomeBox(theme, innerWidth),
+		"",
+		h.renderNoteLine(theme),
+	))
+	bottom := pad.Render(h.renderPromptBlock(theme, innerWidth))
 
-	sections := []string{welcome, "", prompt}
+	filler := height - lipgloss.Height(top) - lipgloss.Height(bottom)
+	if filler < 1 {
+		filler = 1
+	}
 
+	return top + strings.Repeat("\n", filler) + bottom
+}
+
+// renderWelcomeBox is the full-width header: program name embedded in the
+// top border, welcome and the mark on the left, orientation and commands on
+// the right.
+func (h *homeScreen) renderWelcomeBox(theme Theme, width int) string {
+	leftWidth := 30
+	rightWidth := width - leftWidth - 6
+	if rightWidth < 20 {
+		rightWidth = 20
+	}
+
+	muted := lipgloss.NewStyle().Foreground(theme.Muted)
+	accent := lipgloss.NewStyle().Foreground(theme.Accent).Bold(true)
+
+	left := lipgloss.NewStyle().Width(leftWidth).Align(lipgloss.Center).Render(
+		lipgloss.JoinVertical(lipgloss.Center,
+			lipgloss.NewStyle().Bold(true).Render("Welcome to wtff"),
+			"",
+			logoFrame(0),
+			"",
+			muted.Render("A terminal-first macOS maintenance toolkit"),
+			muted.Render(h.deps.Home),
+		))
+
+	var commandRows []string
+	for _, c := range homeCommands {
+		commandRows = append(commandRows,
+			lipgloss.NewStyle().Foreground(theme.Accent).Render(c.name)+
+				muted.Render("  "+c.description))
+	}
+
+	right := lipgloss.NewStyle().Width(rightWidth).PaddingLeft(2).Render(
+		lipgloss.JoinVertical(lipgloss.Left,
+			accent.Render("Getting started"),
+			"Type a command and press Enter. Commands are exact, lowercase words.",
+			"Type / to browse and filter this list instead.",
+			muted.Render(strings.Repeat("─", rightWidth-2)),
+			accent.Render("Commands"),
+			lipgloss.JoinVertical(lipgloss.Left, commandRows...),
+		))
+
+	body := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	return renderTitledBox(theme, "wtff "+h.deps.Version, body, width)
+}
+
+// renderNoteLine sits under the box: the current error when there is one,
+// otherwise a quiet standing reassurance about reversibility.
+func (h *homeScreen) renderNoteLine(theme Theme) string {
 	if h.errorMsg != "" {
-		sections = append(sections, "", lipgloss.NewStyle().Foreground(theme.Danger).Render(h.errorMsg))
+		return lipgloss.NewStyle().Foreground(theme.Danger).Render("▌ " + h.errorMsg)
 	}
-
-	sections = append(sections, "", h.renderCommandList(theme))
-
-	if h.paletteActive {
-		sections = append(sections, "", renderKeyHints(theme,
-			[2]string{"↑↓", "select"}, [2]string{"enter", "run"}, [2]string{"esc", "clear"}))
-	} else {
-		sections = append(sections, "", renderKeyHints(theme,
-			[2]string{"enter", "run"}, [2]string{"/", "browse"}, [2]string{"ctrl+c", "quit"}))
-	}
-
-	return lipgloss.NewStyle().Padding(1, 2).Render(lipgloss.JoinVertical(lipgloss.Left, sections...))
+	return lipgloss.NewStyle().Foreground(theme.Muted).
+		Render("▌ Removals are staged and reversible. Nothing is deleted permanently without --purge.")
 }
 
-// renderWelcomePanel is the boxed header shown once at the top of the home
-// screen: brand, version, the resting frame of the mark, and a one line
-// orientation for someone seeing wtff for the first time. The mark is drawn
-// at rest here, phase zero, fully spread; it only animates on screens that
-// are actually waiting on something, so a person learns to read motion in
-// this program as meaning work is happening, not as constant background
-// decoration.
-func (h *homeScreen) renderWelcomePanel(theme Theme, width int) string {
-	brand := lipgloss.NewStyle().Bold(true).Foreground(theme.Accent).Render(brandName)
-	version := lipgloss.NewStyle().Foreground(theme.Muted).Render(h.deps.Version)
+// renderPromptBlock is the bottom-anchored band: the palette when active,
+// then the framed input line between two dividers, then the key hints.
+func (h *homeScreen) renderPromptBlock(theme Theme, width int) string {
+	divider := lipgloss.NewStyle().Foreground(theme.Border).
+		Render(strings.Repeat("─", width))
 
-	mark := logoFrame(0)
-
-	tagline := lipgloss.NewStyle().Foreground(theme.Muted).Render(
-		"A terminal-first macOS maintenance toolkit.")
-
-	content := lipgloss.JoinVertical(lipgloss.Left,
-		brand+"  "+version,
-		"",
-		mark,
-		"",
-		tagline,
+	var sections []string
+	if h.paletteActive {
+		sections = append(sections, h.renderPalette(theme), "")
+	}
+	sections = append(sections,
+		divider,
+		h.input.View(),
+		divider,
+		renderKeyHints(theme,
+			[2]string{"enter", "run"}, [2]string{"/", "browse"}, [2]string{"ctrl+c", "quit"}),
 	)
-
-	return lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Border).
-		Padding(1, 2).
-		Width(width).
-		Render(content)
+	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
-func (h *homeScreen) renderCommandList(theme Theme) string {
-	list := homeCommands
-	if h.paletteActive {
-		list = filterCommands(strings.TrimPrefix(h.input.Value(), "/"))
+// renderPalette is the filtered, cursor-driven list shown above the prompt
+// while palette mode is active.
+func (h *homeScreen) renderPalette(theme Theme) string {
+	list := filterCommands(strings.TrimPrefix(h.input.Value(), "/"))
+	if len(list) == 0 {
+		return lipgloss.NewStyle().Foreground(theme.Muted).Render("no matching command")
 	}
 
+	muted := lipgloss.NewStyle().Foreground(theme.Muted)
 	var rows []string
 	for i, c := range list {
 		nameStyle := lipgloss.NewStyle().Foreground(theme.Accent)
 		prefix := "  "
-		if h.paletteActive && i == h.paletteCursor {
+		if i == h.paletteCursor {
 			prefix = "> "
 			nameStyle = nameStyle.Bold(true)
 		}
-		desc := lipgloss.NewStyle().Foreground(theme.Muted).Render("  " + c.description)
-		rows = append(rows, prefix+nameStyle.Render(c.name)+desc)
-	}
-	if len(rows) == 0 {
-		return lipgloss.NewStyle().Foreground(theme.Muted).Render("no matching command")
+		rows = append(rows, prefix+nameStyle.Render(c.name)+muted.Render("  "+c.description))
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
+}
+
+// renderTitledBox draws content in a rounded border with the title embedded
+// in the top border line, the way the reference layout does.
+//
+// The supplied example code did this with hardcoded widths and byte-length
+// math, which misaligns the corners whenever the title or width changes;
+// here the replacement top line is computed from the box's actual rendered
+// width using display-width measurement, so the corners always meet.
+func renderTitledBox(theme Theme, title, content string, width int) string {
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(theme.Border).
+		Padding(0, 1).
+		Width(width - 2).
+		Render(content)
+
+	lines := strings.Split(box, "\n")
+	if len(lines) == 0 {
+		return box
+	}
+
+	boxWidth := lipgloss.Width(lines[0])
+	borderStyle := lipgloss.NewStyle().Foreground(theme.Border)
+	titleStyle := lipgloss.NewStyle().Foreground(theme.Accent).Bold(true)
+
+	fill := boxWidth - lipgloss.Width(title) - 5
+	if fill < 0 {
+		fill = 0
+	}
+	lines[0] = borderStyle.Render("╭─ ") + titleStyle.Render(title) +
+		borderStyle.Render(" "+strings.Repeat("─", fill)+"╮")
+
+	return strings.Join(lines, "\n")
 }

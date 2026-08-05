@@ -46,3 +46,26 @@ func TestActivityIndicatorViewShowsLabelAndElapsed(t *testing.T) {
 		t.Fatalf("view should show elapsed time, got: %s", view)
 	}
 }
+
+// The indicator is one line, deliberately. The first version rendered the
+// full multi-line animated mark during operations, which on a real screen
+// read as a field of drifting dots and was rejected against the supplied
+// reference, a single compact status line. This pins the corrected shape.
+func TestActivityIndicatorViewIsASingleLine(t *testing.T) {
+	a := newActivityIndicator("Scanning")
+	if strings.Contains(a.view(darkTheme), "\n") {
+		t.Fatal("the activity indicator must render as a single line")
+	}
+}
+
+// The spinner glyph must change across ticks, or the line is a static
+// string again, indistinguishable from a hang.
+func TestActivityIndicatorGlyphAnimatesAcrossTicks(t *testing.T) {
+	a := newActivityIndicator("Scanning")
+	first := a.view(darkTheme)
+	a.ticks++
+	second := a.view(darkTheme)
+	if first == second {
+		t.Fatal("consecutive ticks should render different spinner frames")
+	}
+}

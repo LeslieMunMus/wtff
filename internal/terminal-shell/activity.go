@@ -8,22 +8,29 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// activityTickInterval paces the logo animation. Fast enough to read as
-// continuous motion, slow enough not to compete for CPU with whatever
-// filesystem work is actually running underneath it.
-const activityTickInterval = 90 * time.Millisecond
+// activityTickInterval paces the spinner. Fast enough to read as motion,
+// slow enough not to compete for CPU with the filesystem work underneath.
+const activityTickInterval = 150 * time.Millisecond
 
-// logoHalfCycleTicks is how many ticks one direction of the breathe, out
-// then in, takes. At the interval above this is roughly a two second cycle
-// end to end.
-const logoHalfCycleTicks = 11
+// spinnerFrames is the compact pulse glyph cycle, drawn in the brand color.
+//
+// The first version of the activity display rendered the full animated mark
+// across a multi-line canvas, which on a real screen looked like a field of
+// drifting dots and was rejected. The reference the project manager supplied
+// is a single line: a small pulsing glyph, then the status text and timer.
+// This matches that shape; the full mark now appears only on the welcome
+// screen, static, so motion in this program always means work is happening.
+var spinnerFrames = []string{"✻", "✼", "✽", "✼"}
 
-// activityIndicator is the shared "something is happening" widget: the
-// animated brand mark, an elapsed timer, and a label. Every screen that
-// waits on a filesystem operation, discovering, applying, undoing, uses one
-// instead of a static "Working…" string, which was the exact complaint that
-// prompted building this: a frozen line of text and a hang look identical,
-// and there was no way to tell them apart from the screen alone.
+// activityIndicator is the shared "something is happening" line: a pulsing
+// glyph, a label, and a live elapsed timer. Every screen that waits on a
+// filesystem operation shows one instead of a static string, which looked
+// identical whether the operation was progressing or completely hung.
+//
+// It shows elapsed time, not progress. A real "cleaned so far of total"
+// figure needs the deletion engine to report partial results while it
+// works, which is the deferred core fix; when that lands, this line is
+// where the figure goes.
 type activityIndicator struct {
 	label     string
 	startedAt time.Time
@@ -43,8 +50,7 @@ func (a activityIndicator) init() tea.Cmd {
 }
 
 // update advances the animation on its own tick and is a no-op for anything
-// else, so a caller can route every message through it unconditionally
-// without first checking the message type itself.
+// else, so a caller can route every message through it unconditionally.
 func (a activityIndicator) update(msg tea.Msg) (activityIndicator, tea.Cmd) {
 	if _, ok := msg.(activityTickMsg); !ok {
 		return a, nil
@@ -53,10 +59,12 @@ func (a activityIndicator) update(msg tea.Msg) (activityIndicator, tea.Cmd) {
 	return a, a.init()
 }
 
+// view renders the single status line.
 func (a activityIndicator) view(theme Theme) string {
-	mark := logoFrame(logoPhase(a.ticks, logoHalfCycleTicks))
+	glyph := lipgloss.NewStyle().Foreground(brandColor).Bold(true).
+		Render(spinnerFrames[a.ticks%len(spinnerFrames)])
 	elapsed := time.Since(a.startedAt).Round(time.Second)
 	status := lipgloss.NewStyle().Foreground(theme.Muted).
-		Render(fmt.Sprintf("%s  ·  %s", a.label, elapsed))
-	return lipgloss.JoinVertical(lipgloss.Left, mark, "", status)
+		Render(fmt.Sprintf("%s · %s", a.label, elapsed))
+	return glyph + "  " + status
 }
