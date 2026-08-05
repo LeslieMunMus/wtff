@@ -40,6 +40,38 @@ func testDeps(t *testing.T, home string) *Deps {
 	return &Deps{Home: home, Rules: rules, Catalog: catalog, Log: operationlog.Discard()}
 }
 
+// resolveBatch runs a command and, if it produces a tea.BatchMsg, runs every
+// sub-command within it and returns the first result whose type matches
+// want. Loading screens now batch their real async work alongside an
+// activity indicator ticker in Init, so a single call no longer yields the
+// work's own message directly; this unwraps that batching the same way
+// Bubble Tea's own runtime would; each sub-command run in its own goroutine,
+// whichever message actually carries the result of interest, found by type
+// rather than by position, since batched commands carry no ordering
+// guarantee.
+func resolveBatch(t *testing.T, cmd tea.Cmd, want func(tea.Msg) bool) tea.Msg {
+	t.Helper()
+	msg := runCmd(t, cmd)
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		if !want(msg) {
+			t.Fatalf("single command produced %T, which does not match what the caller wanted", msg)
+		}
+		return msg
+	}
+	for _, sub := range batch {
+		if sub == nil {
+			continue
+		}
+		result := sub()
+		if want(result) {
+			return result
+		}
+	}
+	t.Fatal("no sub-command in the batch produced the expected message type")
+	return nil
+}
+
 func writeTestFile(t *testing.T, path, contents string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -72,7 +104,10 @@ func TestPlanFlowEndToEndStagesARealFile(t *testing.T) {
 	}
 
 	discovering := newPlanDiscoveringScreen(deps, "Test", fakePlan)
-	msg := runCmd(t, discovering.Init())
+	msg := resolveBatch(t, discovering.Init(), func(m tea.Msg) bool {
+		_, ok := m.(planReadyMsg)
+		return ok
+	})
 	ready, ok := msg.(planReadyMsg)
 	if !ok || ready.err != nil {
 		t.Fatalf("planReadyMsg = %+v, ok=%v", ready, ok)
@@ -122,7 +157,10 @@ func TestPlanFlowEndToEndStagesARealFile(t *testing.T) {
 		t.Fatalf("expected *applyingScreen after confirming, got %T", afterYes)
 	}
 
-	applyMsg := runCmd(t, applying.Init())
+	applyMsg := resolveBatch(t, applying.Init(), func(m tea.Msg) bool {
+		_, ok := m.(applyReadyMsg)
+		return ok
+	})
 	applyReady, ok := applyMsg.(applyReadyMsg)
 	if !ok || applyReady.err != nil {
 		t.Fatalf("applyReadyMsg = %+v, ok=%v", applyReady, ok)
@@ -168,7 +206,10 @@ func TestPlanFlowRespectsProtectionRules(t *testing.T) {
 	}
 
 	discovering := newPlanDiscoveringScreen(deps, "Test", fakePlan)
-	ready := runCmd(t, discovering.Init()).(planReadyMsg)
+	ready := resolveBatch(t, discovering.Init(), func(m tea.Msg) bool {
+		_, ok := m.(planReadyMsg)
+		return ok
+	}).(planReadyMsg)
 	next, _ := discovering.Update(ready)
 	list := next.(*candidateListScreen)
 

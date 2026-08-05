@@ -23,12 +23,21 @@ type Deps struct {
 	Rules   *protectionrules.Set
 	Catalog *cleancatalog.Catalog
 	Log     *operationlog.Writer
+
+	// Version is the running build's version string, shown on the welcome
+	// panel. Passed in by the caller rather than declared here, since
+	// internal/cli owns the version constant and this package cannot import
+	// internal/cli without creating a cycle: internal/cli already imports
+	// this package to launch the shell.
+	Version string
 }
 
 // NewDeps loads every shared dependency, in the same way internal/cli's
 // commands do, so a plan built inside the shell and a plan built by wtff
-// clean --dry-run are produced against identical inputs.
-func NewDeps() (*Deps, error) {
+// clean --dry-run are produced against identical inputs. version is the
+// caller's own version string; see the Version field for why it travels in
+// rather than being read from here.
+func NewDeps(version string) (*Deps, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("cannot determine home directory: %w", err)
@@ -53,7 +62,7 @@ func NewDeps() (*Deps, error) {
 		return nil, fmt.Errorf("cannot open operation log: %w", err)
 	}
 
-	return &Deps{Home: home, Rules: rules, Catalog: catalog, Log: log}, nil
+	return &Deps{Home: home, Rules: rules, Catalog: catalog, Log: log, Version: version}, nil
 }
 
 // Close releases resources Deps opened.

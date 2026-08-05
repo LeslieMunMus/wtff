@@ -182,12 +182,13 @@ func (s *undoConfirmScreen) View(theme Theme, width, height int) string {
 
 // undoApplyingScreen runs the restore and waits for it to finish.
 type undoApplyingScreen struct {
-	deps  *Deps
-	batch *deletionengine.Batch
+	deps     *Deps
+	batch    *deletionengine.Batch
+	activity activityIndicator
 }
 
 func newUndoApplyingScreen(deps *Deps, batch *deletionengine.Batch) *undoApplyingScreen {
-	return &undoApplyingScreen{deps: deps, batch: batch}
+	return &undoApplyingScreen{deps: deps, batch: batch, activity: newActivityIndicator("Restoring")}
 }
 
 type undoReadyMsg struct {
@@ -198,26 +199,29 @@ type undoReadyMsg struct {
 func (s *undoApplyingScreen) Title() string { return "Staged" }
 
 func (s *undoApplyingScreen) Init() tea.Cmd {
-	return func() tea.Msg {
-		result, err := deletionengine.Undo(s.batch, s.deps.Log)
-		return undoReadyMsg{result: result, err: err}
-	}
+	return tea.Batch(
+		func() tea.Msg {
+			result, err := deletionengine.Undo(s.batch, s.deps.Log)
+			return undoReadyMsg{result: result, err: err}
+		},
+		s.activity.init(),
+	)
 }
 
 func (s *undoApplyingScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
-	ready, ok := msg.(undoReadyMsg)
-	if !ok {
-		return s, nil
+	if ready, ok := msg.(undoReadyMsg); ok {
+		if ready.err != nil {
+			return s, tea.Batch(showStatus("restore failed: "+ready.err.Error(), true), resetToMenu())
+		}
+		return newUndoResultsScreen(ready.result), nil
 	}
-	if ready.err != nil {
-		return s, tea.Batch(showStatus("restore failed: "+ready.err.Error(), true), resetToMenu())
-	}
-	return newUndoResultsScreen(ready.result), nil
+	updated, cmd := s.activity.update(msg)
+	s.activity = updated
+	return s, cmd
 }
 
 func (s *undoApplyingScreen) View(theme Theme, width, height int) string {
-	text := lipgloss.NewStyle().Foreground(theme.Muted).Render("Restoring…")
-	return lipgloss.NewStyle().Padding(1, 2).Render(text)
+	return lipgloss.NewStyle().Padding(1, 2).Render(s.activity.view(theme))
 }
 
 type undoResultsScreen struct {

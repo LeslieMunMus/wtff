@@ -78,7 +78,10 @@ func TestStagedFlowEndToEndRestoresARealBatch(t *testing.T) {
 		t.Fatalf("expected *undoApplyingScreen, got %T", afterYes)
 	}
 
-	undoMsg := runCmd(t, applying.Init())
+	undoMsg := resolveBatch(t, applying.Init(), func(m tea.Msg) bool {
+		_, ok := m.(undoReadyMsg)
+		return ok
+	})
 	undoReady, ok := undoMsg.(undoReadyMsg)
 	if !ok || undoReady.err != nil {
 		t.Fatalf("undoReadyMsg = %+v, ok=%v", undoReady, ok)

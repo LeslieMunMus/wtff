@@ -93,7 +93,7 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 // be a real terminal file, which the caller must already have checked, since
 // there is no meaningful way to run a full-screen program against a pipe.
 func runShell(stdin io.Reader, stdout, stderr io.Writer) int {
-	deps, err := terminalshell.NewDeps()
+	deps, err := terminalshell.NewDeps(Version)
 	if err != nil {
 		fmt.Fprintln(stderr, "wtff: cannot start:", err)
 		return 1

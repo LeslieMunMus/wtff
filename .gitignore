@@ -3,6 +3,7 @@
 
 # Go build artifacts
 /bin/
+/wtff
 *.exe
 *.test
 *.out

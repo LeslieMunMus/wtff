@@ -152,7 +152,7 @@ func (a App) View() string {
 // stdin and stdout.
 func Run(deps *Deps, hasDarkBackground bool, input io.Reader, output io.Writer) error {
 	program := tea.NewProgram(
-		NewApp(deps, hasDarkBackground, newMenuScreen(deps)),
+		NewApp(deps, hasDarkBackground, newHomeScreen(deps)),
 		tea.WithAltScreen(),
 		tea.WithInput(input),
 		tea.WithOutput(output),

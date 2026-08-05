@@ -20,14 +20,22 @@ type planFunc func(deps *Deps) (*deletionengine.Manifest, int, error)
 // found and validated. This can take real time: clean's container scans and
 // the deletion engine's own size measurement both do filesystem work, so a
 // visible loading state matters rather than a frozen screen.
+//
+// The activity indicator ticks independently of the scan itself, on its own
+// command, scheduled alongside the scan rather than by it. That
+// independence is the entire point: a scan with no bound on how long a
+// single filesystem call can take must never be what the animation is
+// waiting on, or the indicator would freeze exactly when it matters most,
+// which is precisely the failure a static "Scanning…" string already had.
 type planDiscoveringScreen struct {
-	deps  *Deps
-	title string
-	fn    planFunc
+	deps     *Deps
+	title    string
+	fn       planFunc
+	activity activityIndicator
 }
 
 func newPlanDiscoveringScreen(deps *Deps, title string, fn planFunc) *planDiscoveringScreen {
-	return &planDiscoveringScreen{deps: deps, title: title, fn: fn}
+	return &planDiscoveringScreen{deps: deps, title: title, fn: fn, activity: newActivityIndicator("Scanning")}
 }
 
 type planReadyMsg struct {
@@ -39,26 +47,29 @@ type planReadyMsg struct {
 func (s *planDiscoveringScreen) Title() string { return s.title }
 
 func (s *planDiscoveringScreen) Init() tea.Cmd {
-	return func() tea.Msg {
-		manifest, skipped, err := s.fn(s.deps)
-		return planReadyMsg{manifest: manifest, skippedCount: skipped, err: err}
-	}
+	return tea.Batch(
+		func() tea.Msg {
+			manifest, skipped, err := s.fn(s.deps)
+			return planReadyMsg{manifest: manifest, skippedCount: skipped, err: err}
+		},
+		s.activity.init(),
+	)
 }
 
 func (s *planDiscoveringScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
-	ready, ok := msg.(planReadyMsg)
-	if !ok {
-		return s, nil
+	if ready, ok := msg.(planReadyMsg); ok {
+		if ready.err != nil {
+			return s, tea.Batch(showStatus("could not scan: "+ready.err.Error(), true), resetToMenu())
+		}
+		return newCandidateListScreen(s.deps, s.title, ready.manifest, ready.skippedCount), nil
 	}
-	if ready.err != nil {
-		return s, tea.Batch(showStatus("could not scan: "+ready.err.Error(), true), resetToMenu())
-	}
-	return newCandidateListScreen(s.deps, s.title, ready.manifest, ready.skippedCount), nil
+	updated, cmd := s.activity.update(msg)
+	s.activity = updated
+	return s, cmd
 }
 
 func (s *planDiscoveringScreen) View(theme Theme, width, height int) string {
-	text := lipgloss.NewStyle().Foreground(theme.Muted).Render("Scanning…")
-	return lipgloss.NewStyle().Padding(1, 2).Render(text)
+	return lipgloss.NewStyle().Padding(1, 2).Render(s.activity.view(theme))
 }
 
 // candidateListScreen presents a plan's entries for selection.
@@ -180,15 +191,22 @@ func (s *confirmScreen) View(theme Theme, width, height int) string {
 	return lipgloss.NewStyle().Padding(1, 2).Render(content)
 }
 
-// applyingScreen runs Apply and waits for it to finish.
+// applyingScreen runs Apply and waits for it to finish. See
+// planDiscoveringScreen for why its activity indicator ticks on its own
+// command rather than depending on Apply itself to drive it.
 type applyingScreen struct {
 	deps     *Deps
 	title    string
 	manifest *deletionengine.Manifest
+	activity activityIndicator
 }
 
 func newApplyingScreen(deps *Deps, title string, manifest *deletionengine.Manifest) *applyingScreen {
-	return &applyingScreen{deps: deps, title: title, manifest: manifest}
+	verb := "Staging"
+	if manifest.Action == deletionengine.ActionPurge {
+		verb = "Removing"
+	}
+	return &applyingScreen{deps: deps, title: title, manifest: manifest, activity: newActivityIndicator(verb)}
 }
 
 type applyReadyMsg struct {
@@ -199,36 +217,39 @@ type applyReadyMsg struct {
 func (s *applyingScreen) Title() string { return s.title }
 
 func (s *applyingScreen) Init() tea.Cmd {
-	return func() tea.Msg {
-		var staging *deletionengine.StagingArea
-		if s.manifest.Action == deletionengine.ActionStage {
-			var err error
-			staging, err = s.deps.newStagingArea()
-			if err != nil {
-				return applyReadyMsg{err: err}
+	return tea.Batch(
+		func() tea.Msg {
+			var staging *deletionengine.StagingArea
+			if s.manifest.Action == deletionengine.ActionStage {
+				var err error
+				staging, err = s.deps.newStagingArea()
+				if err != nil {
+					return applyReadyMsg{err: err}
+				}
 			}
-		}
-		result, err := deletionengine.Apply(s.manifest, deletionengine.ApplyOptions{
-			Staging: staging, Policy: s.deps.Rules, Log: s.deps.Log,
-		})
-		return applyReadyMsg{result: result, err: err}
-	}
+			result, err := deletionengine.Apply(s.manifest, deletionengine.ApplyOptions{
+				Staging: staging, Policy: s.deps.Rules, Log: s.deps.Log,
+			})
+			return applyReadyMsg{result: result, err: err}
+		},
+		s.activity.init(),
+	)
 }
 
 func (s *applyingScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
-	ready, ok := msg.(applyReadyMsg)
-	if !ok {
-		return s, nil
+	if ready, ok := msg.(applyReadyMsg); ok {
+		if ready.err != nil {
+			return s, tea.Batch(showStatus("apply failed: "+ready.err.Error(), true), resetToMenu())
+		}
+		return newResultsScreen(s.title, s.manifest.Action, ready.result), nil
 	}
-	if ready.err != nil {
-		return s, tea.Batch(showStatus("apply failed: "+ready.err.Error(), true), resetToMenu())
-	}
-	return newResultsScreen(s.title, s.manifest.Action, ready.result), nil
+	updated, cmd := s.activity.update(msg)
+	s.activity = updated
+	return s, cmd
 }
 
 func (s *applyingScreen) View(theme Theme, width, height int) string {
-	text := lipgloss.NewStyle().Foreground(theme.Muted).Render("Working…")
-	return lipgloss.NewStyle().Padding(1, 2).Render(text)
+	return lipgloss.NewStyle().Padding(1, 2).Render(s.activity.view(theme))
 }
 
 // resultsScreen shows what happened and waits for any key before returning
