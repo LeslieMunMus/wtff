@@ -23,6 +23,8 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 
 	switch args[0] {
+	case "clean":
+		return runClean(args[1:], stdin, stdout, stderr)
 	case "remove":
 		return runRemove(args[1:], stdin, stdout, stderr)
 	case "undo":
@@ -46,6 +48,12 @@ func printUsage(w io.Writer) {
 	fmt.Fprint(w, `wtff, a terminal-first macOS maintenance toolkit.
 
 Usage:
+  wtff clean [--dry-run] [--purge] [--yes]
+      Find and remove common reclaimable cache directories: third party
+      application caches, developer tool caches, and Trash contents. Staged
+      by default. Skips anything covered by a protection rule, or that this
+      machine simply does not have.
+
   wtff remove [--dry-run] [--purge] [--yes] <path>...
       Remove one or more paths. Staged by default, which is reversible
       through "wtff undo"; pass --purge to remove permanently instead.

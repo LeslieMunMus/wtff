@@ -1,0 +1,205 @@
+version: 1
+
+# Apple first-party service state that lives under directories named like
+# caches without actually being rebuildable cache content.
+#
+# Found by inspecting a real ~/Library/Caches directory while designing the
+# clean command's candidate discovery. Apple's own Caches contract requires
+# every application to be able to regenerate anything stored there, and third
+# party apps generally honor it. Several of Apple's own services under the
+# com.apple. namespace do not: FamilyCircle, CloudKit and the HomeKit and
+# GameKit state observed on the inspected machine hold account, family
+# sharing, home automation and cloud sync state, not disposable content. The
+# irony that Apple's own services are the ones not reliably following Apple's
+# own contract is exactly why this needed to be found by looking rather than
+# assumed from the directory name.
+
+rules:
+  - id: apple-namespaced-cache-state
+    match:
+      type: glob
+      path: "~/Library/Caches/com.apple.*"
+    effect: protect
+    severity: standard
+    category: platform-security
+    reason: >-
+      Directories under the com.apple. namespace inside Caches were found on
+      inspection to include family sharing, cloud sync, home automation and
+      privacy identifier state rather than only rebuildable content.
+      Protected as a whole namespace rather than item by item, since new
+      entries appear across macOS versions and an allowlist approach would
+      need updating for each one; a specific entry can be individually
+      vetted and carved out once its contents are actually confirmed safe.
+    provenance:
+      source: "Directory listing of ~/Library/Caches inspected on macOS running Darwin 25.6, showing over ninety com.apple. prefixed entries."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: family-sharing-cache-state
+    match:
+      type: prefix
+      path: "~/Library/Caches/FamilyCircle"
+    effect: protect
+    severity: standard
+    category: personal-records
+    reason: >-
+      Holds Family Sharing group membership and configuration state. Not
+      namespaced under com.apple. so the broader namespace rule does not
+      reach it, and its contents relate to a multi-person account
+      relationship rather than disposable data.
+    provenance:
+      source: "Directory presence confirmed on macOS running Darwin 25.6, name and context consistent with the Family Sharing feature."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: family-sharing-daemon-cache-state
+    match:
+      type: prefix
+      path: "~/Library/Caches/familycircled"
+    effect: protect
+    severity: standard
+    category: personal-records
+    reason: >-
+      Companion directory to family-sharing-cache-state, for the daemon that
+      manages the same feature. Kept as a separate rule since it is a
+      separate directory on disk, not a subdirectory of the one above.
+    provenance:
+      source: "Directory presence confirmed on macOS running Darwin 25.6."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: cloudkit-sync-state
+    match:
+      type: prefix
+      path: "~/Library/Caches/CloudKit"
+    effect: protect
+    severity: standard
+    category: synchronized-storage
+    reason: >-
+      Holds CloudKit sync state for applications that use it. Not namespaced
+      under com.apple. so the broader namespace rule does not reach it.
+      Removing sync state is not the same as removing user data, but it can
+      force a full resync and, for offline-authored records not yet pushed,
+      risks losing them before the next sync completes.
+    provenance:
+      source: "Directory presence confirmed on macOS running Darwin 25.6, consistent with Apple's CloudKit framework documentation."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: gamekit-state
+    match:
+      type: prefix
+      path: "~/Library/Caches/GameKit"
+    effect: protect
+    severity: standard
+    category: personal-records
+    reason: >-
+      Holds Game Center state such as player identity and achievement data
+      used by games on the machine. Not namespaced under com.apple. so the
+      broader namespace rule does not reach it.
+    provenance:
+      source: "Directory presence confirmed on macOS running Darwin 25.6, consistent with Apple's GameKit framework."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: app-subscription-configuration-state
+    match:
+      type: prefix
+      path: "~/Library/Caches/AppSubscriptionsConfiguration"
+    effect: protect
+    severity: standard
+    category: personal-records
+    reason: >-
+      Name and location are consistent with configuration state for active
+      App Store subscriptions rather than rebuildable content. Not
+      namespaced under com.apple. so the broader namespace rule does not
+      reach it.
+    provenance:
+      source: "Directory presence confirmed on macOS running Darwin 25.6. Purpose inferred from its name and location; not confirmed against Apple documentation, which does not appear to describe this directory."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: safari-webkit-render-cache
+    match:
+      type: prefix
+      path: "~/Library/Caches/com.apple.Safari/WebKitCache"
+    effect: allow
+    severity: standard
+    category: developer-cache
+    reason: >-
+      Safari's own WebKit render and resource cache, individually vetted
+      rather than left under the broad namespace protection above. Safari's
+      Develop menu exposes an Empty Caches command that clears exactly this
+      data, which is Apple's own confirmation that it is safe and expected
+      to be cleared; the browser refetches anything needed on the next page
+      load. Carved out by name rather than by widening the exclusion in the
+      clean catalog, so the exception is visible here, in the same place
+      the broader protection is stated, rather than only in a comment
+      elsewhere.
+    provenance:
+      source: "Safari's Develop menu Empty Caches feature, and WebKit project documentation describing the resource cache as safe to clear."
+      method: vendor-documentation
+      verified: "2026-08-05"
+
+  - id: pseudonymous-identifier-cache-state
+    match:
+      type: prefix
+      path: "~/Library/Caches/GIPPseudonymousID"
+    effect: protect
+    severity: standard
+    category: personal-records
+    reason: >-
+      Its own name states it holds a persisted pseudonymous identifier,
+      which is tracking or account correlation state rather than disposable
+      content by definition, whatever specifically generates or reads it.
+      What exactly writes this directory was not identified with confidence
+      during inspection; the name alone is reason enough to keep it out of
+      automated cleanup until that is known.
+    provenance:
+      source: "Directory presence confirmed on macOS running Darwin 25.6. The owning process was not identified; this rule rests on the directory's own name, not on confirmed knowledge of its contents."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: passkit-wallet-cache-state
+    match:
+      type: prefix
+      path: "~/Library/Caches/PassKit"
+    effect: protect
+    severity: standard
+    category: personal-records
+    reason: >-
+      Found while reviewing real wtff clean output rather than during the
+      initial inspection pass. Holds PassAssetCache, RemoteCards and a
+      cache.plist, consistent with Apple Wallet's local cache of pass
+      artwork and remote card state. Boarding passes and loyalty cards
+      themselves are believed to live elsewhere, but that was not confirmed,
+      and the directory sits next to payment-adjacent infrastructure closely
+      enough that the low reclaim value here does not justify the risk of
+      being wrong. Not namespaced under com.apple. so the broader namespace
+      rule does not reach it.
+    provenance:
+      source: "Directory contents inspected on macOS running Darwin 25.6."
+      method: system-inspection
+      verified: "2026-08-05"
+
+  - id: permission-prompt-daemon-cache-state
+    match:
+      type: prefix
+      path: "~/Library/Caches/askpermissiond"
+    effect: protect
+    severity: standard
+    category: platform-security
+    reason: >-
+      Found while reviewing real wtff clean output rather than during the
+      initial inspection pass. Belongs to askpermissiond, the system
+      permission prompt daemon; the directory holds a SQLite database named
+      Cache.db. The actual grant and deny decisions live in the TCC
+      database, already protected separately, and this is more likely a
+      rendering cache than a record of decisions, but its adjacency to the
+      permission system and its trivial size both argue for caution over
+      the small amount of space involved. Not namespaced under com.apple.
+      so the broader namespace rule does not reach it.
+    provenance:
+      source: "Directory contents inspected on macOS running Darwin 25.6."
+      method: system-inspection
+      verified: "2026-08-05"

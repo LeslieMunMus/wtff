@@ -198,6 +198,27 @@ func TestShippedRulesDoNotOverreach(t *testing.T) {
 	}
 }
 
+// The Safari WebKit cache carve-out was added after the broad com.apple.*
+// namespace protection broke an existing over-reach test, discovered by
+// running the full suite after adding that protection, not anticipated in
+// advance. The carve-out must be narrow: it should free exactly the vetted
+// WebKit cache and nothing else under Safari's directory, or a rule meant to
+// free one specific, individually justified target would have quietly become
+// a blanket exemption for an entire vendor's namespace.
+func TestSafariCarveOutIsNarrowNotABlanketExemption(t *testing.T) {
+	set := loadForTest(t)
+
+	if decision := set.Evaluate(testHome + "/Library/Caches/com.apple.Safari/WebKitCache/blob"); decision.Protected {
+		t.Fatalf("the vetted WebKit cache is still protected by %s", decision.RuleID)
+	}
+	if !set.Evaluate(testHome + "/Library/Caches/com.apple.Safari/Bookmarks.db").Protected {
+		t.Fatal("an unvetted sibling under the same Safari cache directory was exposed by the carve-out")
+	}
+	if !set.Evaluate(testHome + "/Library/Caches/com.apple.Safari").Protected {
+		t.Fatal("the Safari cache directory itself was exposed by the carve-out meant for one subdirectory")
+	}
+}
+
 // Every shipped rule must actually be reachable. A rule whose pattern can never
 // match anything is dead weight that reads as protection.
 func TestEveryShippedRuleMatchesSomething(t *testing.T) {

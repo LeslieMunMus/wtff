@@ -10,19 +10,22 @@ The safety core is built and tested, and is now reachable from a real terminal c
 
 ```bash
 go build -o wtff ./cmd/wtff
-./wtff remove --dry-run ~/Library/Caches/some-app   # preview only, changes nothing
+./wtff clean --dry-run                              # preview reclaimable caches, changes nothing
+./wtff clean                                        # stages them, reversible
+./wtff remove --dry-run ~/Library/Caches/some-app   # preview a specific path
 ./wtff remove ~/Library/Caches/some-app             # stages it, reversible
 ./wtff staged                                       # list what is staged
 ./wtff undo <batch-id>                              # restore it
 ```
 
 Implemented: structural path validation, the deletion engine with plan and apply, staging based
-undo, the operation log, the protection rule schema with an initial rule set, and a `remove`
-command that exercises all of it end to end.
+undo, the operation log, the protection rule schema with an initial rule set, a candidate
+discovery catalog for common cache categories, and `clean` and `remove` commands that exercise
+all of it end to end.
 
-Not yet built: the full-screen terminal interface, the `clean` rule set that proposes what to
-remove on its own, and the `uninstall` command. `remove` takes only paths named directly; it has
-no notion of a cache category or an installed app yet.
+Not yet built: the full-screen terminal interface and the `uninstall` command. `clean`'s catalog
+covers application caches, developer tool caches, and Trash; it does not yet know about
+installed applications or their leftovers.
 
 See `docs/decisions/` for a numbered record of what was decided and why, and
 `docs/architecture/` for how the pieces fit together. Packages that are implemented document

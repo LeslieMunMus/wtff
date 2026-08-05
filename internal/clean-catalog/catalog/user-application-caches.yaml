@@ -1,0 +1,22 @@
+version: 1
+
+entries:
+  - id: user-library-caches-third-party
+    category: application-caches
+    kind: container
+    path: "~/Library/Caches"
+    exclude_prefixes: ["com.apple."]
+    reason: >-
+      Apple's Caches directory contract requires every application to be
+      able to regenerate anything stored here, and the system itself may
+      purge this directory under storage pressure. Apple's own first party
+      services under the com.apple. namespace are excluded from this
+      category, since inspecting a real machine while this catalog was
+      designed found several, such as FamilyCircle and CloudKit, holding
+      account and sync state rather than rebuildable content despite living
+      here; those are handled individually, with their own reasons, by
+      protection rules instead.
+    provenance:
+      source: "Apple Developer documentation, FileManager searchPathDirectory .cachesDirectory, which describes Caches as system-purgeable, application-regenerable storage."
+      method: documentation
+      verified: "2026-08-05"

@@ -1,0 +1,17 @@
+version: 1
+
+entries:
+  - id: trash-contents
+    category: trash
+    kind: container
+    path: "~/.Trash"
+    reason: >-
+      Items already moved to Trash by the user through Finder or another
+      application. Proposing them here still routes the removal through
+      wtff's own reversible staging area rather than a second, irreversible
+      deletion, so a mistaken selection can still be undone even though the
+      item was already discarded once.
+    provenance:
+      source: "Directory presence confirmed on macOS running Darwin 25.6."
+      method: system-inspection
+      verified: "2026-08-05"

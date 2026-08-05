@@ -1,0 +1,43 @@
+version: 1
+
+entries:
+  - id: xcode-derived-data
+    category: developer-tools
+    kind: container
+    path: "~/Library/Developer/Xcode/DerivedData"
+    reason: >-
+      Holds per-project build products and the source index that Xcode
+      rebuilds automatically the next time a project is opened or built.
+    provenance:
+      source: "Apple Developer documentation on the Xcode build system and DerivedData."
+      method: documentation
+      verified: "2026-08-05"
+
+  - id: npm-content-addressed-cache
+    category: developer-tools
+    kind: opaque
+    path: "~/.npm/_cacache"
+    reason: >-
+      npm's content addressed package cache, populated automatically on
+      install and repopulated on demand from the registry. Treated as one
+      unit rather than enumerated by subdirectory, since its internal layout
+      is a content hash index and reviewing individual hash named entries
+      would not communicate anything a single line does not already say.
+    provenance:
+      source: "npm documentation for npm cache clean, and the cacache module it is built on, which documents its store as safe to delete."
+      method: documentation
+      verified: "2026-08-05"
+
+  - id: xdg-style-user-cache
+    category: developer-tools
+    kind: container
+    path: "~/.cache"
+    reason: >-
+      Many cross platform command line tools honor the XDG Base Directory
+      convention on macOS and store their cache under this directory even
+      though it is not an Apple defined location. The specification itself
+      defines its contents as safe to delete.
+    provenance:
+      source: "XDG Base Directory Specification, which defines XDG_CACHE_HOME as holding non-essential, regenerable data."
+      method: documentation
+      verified: "2026-08-05"
