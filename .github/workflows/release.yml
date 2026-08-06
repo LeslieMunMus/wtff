@@ -1,0 +1,57 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build, for a dry run without publishing"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # macOS, both because wtff is a macOS tool and because building a universal
+    # binary needs lipo, which only ships there.
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The version is stamped from git describe, which has nothing to
+          # describe in the default shallow clone.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # dist depends on check, so a tag cannot produce a release from a tree
+      # that does not pass its own tests.
+      - name: Build the release archive
+        run: make dist
+
+      - name: Confirm the archive runs and reports the tagged version
+        run: |
+          tar xzf dist/*.tar.gz -C dist
+          ./dist/wtff version
+          test "$(./dist/wtff version)" = "${GITHUB_REF_NAME}" || {
+            echo "binary reports $(./dist/wtff version), tag is ${GITHUB_REF_NAME}"
+            exit 1
+          }
+          rm -f dist/wtff
+
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/checksums.txt
+          body_path: CHANGELOG.md
+          draft: true
+          fail_on_unmatched_files: true

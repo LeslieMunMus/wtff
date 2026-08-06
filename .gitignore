@@ -15,3 +15,5 @@
 # Editor state
 .vscode/
 .idea/
+
+/dist/

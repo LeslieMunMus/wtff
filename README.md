@@ -11,6 +11,21 @@ tested.
 
 ## Install
 
+With Homebrew, once the tap exists:
+
+```bash
+brew install lesliemusengi/wtff/wtff
+```
+
+The tap builds from source on your machine. That is deliberate rather than
+lazy: a prebuilt binary downloaded from the internet is quarantined by
+Gatekeeper and will not open until it is notarized, which needs a paid Apple
+Developer account, or cleared by hand with `xattr`, which teaches people to
+disarm the protection that would have caught a genuinely malicious download.
+Nothing arrives already built, so nothing is quarantined.
+
+From a clone:
+
 ```bash
 make install
 ```
@@ -90,6 +105,29 @@ provenance. wtff is built around three commitments instead:
 ## Naming convention
 
 See `docs/architecture/naming-conventions.md`.
+
+## Releasing
+
+```bash
+make dist
+```
+
+Builds a universal binary for Apple silicon and Intel, archives it, and writes
+a SHA-256 checksum. It depends on `make check`, so a release cannot be cut from
+a tree that does not pass its own tests.
+
+Tagging is what publishes. Pushing a `v*` tag runs the release workflow, which
+rebuilds from a clean checkout, asserts the binary reports the tag it was built
+from, and opens a draft release with the archive and checksums attached. The
+draft is deliberate: it is a chance to read the notes before anyone else does.
+
+```bash
+git tag -a v0.1.0 -m "wtff 0.1.0"
+git push origin v0.1.0
+```
+
+Then update `url` and `sha256` in `packaging/homebrew/wtff.rb`, and copy it to
+`Formula/wtff.rb` in a repository named `homebrew-wtff`.
 
 ## License
 

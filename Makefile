@@ -51,6 +51,26 @@ check: ## Everything that must pass before a change is done
 dash-scan: ## Refuse em dashes and en dashes anywhere in the project
 	go test ./internal/house-rules/ -run TestNoEmOrEnDashes -count=1
 
+# Release builds. lipo is spelled out rather than found on PATH: several
+# toolchains ship their own, and picking up the wrong one would produce an
+# archive that fails to run on half the machines it is offered to.
+LIPO    := /usr/bin/lipo
+DISTDIR := dist
+
+.PHONY: dist
+dist: check ## Build a universal binary, archive and checksum, after checks pass
+	@rm -rf $(DISTDIR) && mkdir -p $(DISTDIR)
+	GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags '-s -w $(LDFLAGS)' 		-o $(DISTDIR)/$(BINARY)-arm64 $(CMD)
+	GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags '-s -w $(LDFLAGS)' 		-o $(DISTDIR)/$(BINARY)-amd64 $(CMD)
+	$(LIPO) -create -output $(DISTDIR)/$(BINARY) 		$(DISTDIR)/$(BINARY)-arm64 $(DISTDIR)/$(BINARY)-amd64
+	@rm -f $(DISTDIR)/$(BINARY)-arm64 $(DISTDIR)/$(BINARY)-amd64
+	@$(LIPO) -info $(DISTDIR)/$(BINARY)
+	cd $(DISTDIR) && tar czf $(BINARY)-$(VERSION)-macos-universal.tar.gz $(BINARY)
+	cd $(DISTDIR) && shasum -a 256 *.tar.gz > checksums.txt
+	@rm -f $(DISTDIR)/$(BINARY)
+	@cat $(DISTDIR)/checksums.txt
+
 .PHONY: clean
-clean: ## Remove the locally built binary
+clean: ## Remove build output
 	rm -f $(BINARY)
+	rm -rf $(DISTDIR)
