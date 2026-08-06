@@ -93,4 +93,10 @@ See `docs/architecture/naming-conventions.md`.
 
 ## License
 
-Not yet chosen. Treat the repository as all rights reserved until a license file is added.
+MIT. See `LICENSE`.
+
+wtff is an independent, from-scratch project. It does not reuse code, comments, or curated data
+from any other cleanup tool. Architectural ideas and publicly documented facts about macOS are
+not copyrightable; specific expression, including a curated protection list as a compilation, is.
+Every protection rule and catalog entry in this repository carries a provenance field naming the
+primary source it was derived from, so that claim can be checked rather than trusted.

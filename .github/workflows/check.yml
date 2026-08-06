@@ -1,0 +1,40 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    # macOS, because wtff is a macOS tool: it uses descriptor relative syscalls
+    # and resolves real system paths, and a Linux runner would report a green
+    # build for behavior this project never runs on.
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The Makefile stamps the version from git describe, which needs
+          # history rather than the default shallow clone.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify formatting, vet, tests, and the em dash rule
+        run: make check
+
+      - name: Run the suite under the race detector
+        run: make race
+
+      - name: Confirm the binary builds and reports its version
+        run: |
+          make build
+          ./wtff version

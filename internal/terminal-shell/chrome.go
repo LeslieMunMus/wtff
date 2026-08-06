@@ -19,17 +19,29 @@ func renderKeyHints(theme Theme, pairs ...[2]string) string {
 	return strings.Join(parts, muted.Render(" · "))
 }
 
-// scrollbarWidth is how many columns the scrollbar occupies. Two, because a
-// single column reads as a hairline rather than a control, and because a
-// grabbable target one cell wide is easy to miss with a pointer.
-//
-// The columns are reserved whether or not the bar is visible, so the
-// transcript does not reflow the moment content grows past one screen.
-const scrollbarWidth = 2
+// scrollbarWidth is how many columns the scrollbar draws in, kept slim to
+// match the system bar it is modelled on. The column is reserved whether or
+// not the bar is visible, so the transcript does not reflow the moment content
+// grows past one screen.
+const scrollbarWidth = 1
 
-// scrollbarCell is drawn full width in both columns, so the bar reads as a
-// solid rail rather than a dotted line.
-const scrollbarCell = "█"
+// scrollbarGrabSlack widens the grabbable region to the left of the bar
+// without widening the bar itself, the way a system scrollbar has a hit area
+// larger than its visible track. The columns it covers are the transcript's
+// right padding, so nothing readable is stolen.
+const scrollbarGrabSlack = 2
+
+// scrollbarSegment renders one row of the bar.
+//
+// The color is a background on blank cells rather than a foreground on a block
+// glyph. A block glyph depends on the font filling its cell to the full line
+// height, and many monospace fonts do not, which leaves thin horizontal gaps
+// between rows and turns a continuous bar into a dashed one. A background
+// fills the whole cell in every font.
+func scrollbarSegment(color lipgloss.Color) string {
+	return lipgloss.NewStyle().Background(color).
+		Render(strings.Repeat(" ", scrollbarWidth))
+}
 
 // scrollbarThumb returns the thumb's top row and length for a given scroll
 // position, or a zero length when there is nothing to scroll.
@@ -104,12 +116,10 @@ func renderScrollbar(theme Theme, height, totalLines, offset int) string {
 		return ""
 	}
 
-	bar := strings.Repeat(scrollbarCell, scrollbarWidth)
-	blank := strings.Repeat(" ", scrollbarWidth)
-
 	start, size := scrollbarThumb(height, totalLines, offset)
 	if size == 0 {
-		// Nothing to scroll: the columns stay, blank, holding their place.
+		// Nothing to scroll: the column stays, blank, holding its place.
+		blank := strings.Repeat(" ", scrollbarWidth)
 		lines := make([]string, height)
 		for i := range lines {
 			lines[i] = blank
@@ -117,8 +127,8 @@ func renderScrollbar(theme Theme, height, totalLines, offset int) string {
 		return strings.Join(lines, "\n")
 	}
 
-	track := lipgloss.NewStyle().Foreground(theme.Highlight).Render(bar)
-	thumb := lipgloss.NewStyle().Foreground(theme.Accent).Render(bar)
+	track := scrollbarSegment(theme.Highlight)
+	thumb := scrollbarSegment(theme.Accent)
 
 	lines := make([]string, height)
 	for i := range lines {

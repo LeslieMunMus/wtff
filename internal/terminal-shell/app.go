@@ -119,6 +119,11 @@ func (a App) resize(msg tea.WindowSizeMsg) App {
 
 	if !a.ready {
 		a.view = viewport.New(contentWidth, viewHeight)
+		// One line per wheel event rather than the component's default of
+		// three. macOS sends a stream of events for a single trackpad gesture,
+		// and three lines each turns that stream into visible jumps instead of
+		// a glide.
+		a.view.MouseWheelDelta = 1
 		a.ready = true
 		// The welcome box is the first transcript entry rather than a fixed
 		// header: it scrolls away as history accumulates, the way the
@@ -219,8 +224,13 @@ func (a App) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 // onScrollbar reports whether a point falls in the scrollbar's columns beside
 // the transcript. The transcript occupies the top of the screen, so the
 // scrollbar's rows run from zero to the viewport's height.
+// The grabbable region runs wider than the drawn bar, so a slim bar stays easy
+// to catch. A terminal program cannot change the pointer's shape, so there is
+// no hover cue to aim by, which makes a forgiving target matter more here than
+// it would in a window system.
 func (a App) onScrollbar(x, y int) bool {
-	return x >= a.width-scrollbarWidth && x < a.width && y >= 0 && y < a.view.Height
+	return x >= a.width-scrollbarWidth-scrollbarGrabSlack && x < a.width &&
+		y >= 0 && y < a.view.Height
 }
 
 // beginDrag takes hold of the thumb. Pressing the track jumps the thumb to the

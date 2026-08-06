@@ -28,7 +28,7 @@ func TestScrollbarIsBlankWhenEverythingFits(t *testing.T) {
 	if len(lines) != 10 {
 		t.Fatalf("scrollbar has %d lines, want 10", len(lines))
 	}
-	if strings.Contains(bar, scrollbarCell) {
+	if strings.Contains(bar, "\x1b[") {
 		t.Fatal("a transcript that fits should show no bar")
 	}
 	for i, line := range lines {
@@ -43,10 +43,8 @@ func TestScrollbarShowsThumbAndTrackWhenContentOverflows(t *testing.T) {
 	withColor(t)
 
 	bar := renderScrollbar(brandTheme, 10, 100, 0)
-	thumb := lipgloss.NewStyle().Foreground(brandTheme.Accent).
-		Render(strings.Repeat(scrollbarCell, scrollbarWidth))
-	track := lipgloss.NewStyle().Foreground(brandTheme.Highlight).
-		Render(strings.Repeat(scrollbarCell, scrollbarWidth))
+	thumb := scrollbarSegment(brandTheme.Accent)
+	track := scrollbarSegment(brandTheme.Highlight)
 
 	if !strings.Contains(bar, thumb) {
 		t.Fatal("an overflowing transcript needs a thumb")
@@ -56,15 +54,33 @@ func TestScrollbarShowsThumbAndTrackWhenContentOverflows(t *testing.T) {
 	}
 }
 
-// The bar is a pointer target, not a hairline, so its width is pinned.
-func TestScrollbarIsThickEnoughToGrab(t *testing.T) {
-	if scrollbarWidth < 2 {
-		t.Fatalf("scrollbar is %d column(s), too thin to grab", scrollbarWidth)
+// The bar stays slim, but the region that grabs it does not, since a terminal
+// cannot change the pointer shape to show where the control is.
+func TestGrabRegionIsWiderThanTheDrawnBar(t *testing.T) {
+	if scrollbarGrabSlack < 1 {
+		t.Fatal("the grab region should be more forgiving than the drawn bar")
 	}
 	for _, line := range strings.Split(renderScrollbar(brandTheme, 8, 80, 0), "\n") {
 		if lipgloss.Width(line) != scrollbarWidth {
 			t.Fatalf("line is %d wide, want %d", lipgloss.Width(line), scrollbarWidth)
 		}
+	}
+}
+
+// The bar is painted as a background on blank cells, not a block glyph. A
+// glyph relies on the font filling its cell to the full line height, and many
+// monospace fonts leave a gap, which renders a continuous bar as a dashed one.
+func TestScrollbarIsPaintedAsABackgroundNotAGlyph(t *testing.T) {
+	withColor(t)
+
+	bar := renderScrollbar(brandTheme, 8, 80, 0)
+	for _, glyph := range []string{"\u2588", "\u2503", "\u2502", "\u258c", "\u2590"} {
+		if strings.Contains(bar, glyph) {
+			t.Fatalf("the bar draws glyph %q, which leaves gaps in many fonts", glyph)
+		}
+	}
+	if !strings.Contains(bar, "48;2;") {
+		t.Fatal("the bar should be painted with a background color")
 	}
 }
 
@@ -100,9 +116,8 @@ func TestScrollbarUsesTheBrandColors(t *testing.T) {
 	withColor(t)
 
 	bar := renderScrollbar(brandTheme, 10, 100, 0)
-	cells := strings.Repeat(scrollbarCell, scrollbarWidth)
-	thumb := lipgloss.NewStyle().Foreground(brandTheme.Accent).Render(cells)
-	track := lipgloss.NewStyle().Foreground(brandTheme.Highlight).Render(cells)
+	thumb := scrollbarSegment(brandTheme.Accent)
+	track := scrollbarSegment(brandTheme.Highlight)
 
 	if !strings.Contains(bar, thumb) {
 		t.Fatal("the thumb should carry the main color")

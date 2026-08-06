@@ -49,10 +49,7 @@ check: ## Everything that must pass before a change is done
 
 .PHONY: dash-scan
 dash-scan: ## Refuse em dashes and en dashes anywhere in the project
-	@! grep -rlnP '\xe2\x80\x94|\xe2\x80\x93' \
-		--include='*.go' --include='*.md' --include='*.yaml' \
-		./cmd ./internal ./docs 2>/dev/null \
-		|| { echo "em or en dash found in the files above"; exit 1; }
+	go test ./internal/house-rules/ -run TestNoEmOrEnDashes -count=1
 
 .PHONY: clean
 clean: ## Remove the locally built binary
