@@ -40,7 +40,7 @@ func TestPurgePlanUsesThePurgeAction(t *testing.T) {
 	home, _ := homeWithTrash(t)
 	deps := testDeps(t, home)
 
-	manifest, _, err := purgePlan(deps)
+	manifest, _, err := purgePlan(deps, nil)
 	if err != nil {
 		t.Fatalf("purge plan: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestPurgePlanLeavesCachesAlone(t *testing.T) {
 	writeTestFile(t, filepath.Join(cacheDir, "data"), "regenerable")
 	deps := testDeps(t, home)
 
-	manifest, _, err := purgePlan(deps)
+	manifest, _, err := purgePlan(deps, nil)
 	if err != nil {
 		t.Fatalf("purge plan: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestPurgeSelectionRoutesThroughConfirmation(t *testing.T) {
 	home, _ := homeWithTrash(t)
 	deps := testDeps(t, home)
 
-	manifest, _, err := purgePlan(deps)
+	manifest, _, err := purgePlan(deps, nil)
 	if err != nil {
 		t.Fatalf("purge plan: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestPurgeSelectionNeverPromisesStaging(t *testing.T) {
 	home, _ := homeWithTrash(t)
 	deps := testDeps(t, home)
 
-	manifest, _, err := purgePlan(deps)
+	manifest, _, err := purgePlan(deps, nil)
 	if err != nil {
 		t.Fatalf("purge plan: %v", err)
 	}

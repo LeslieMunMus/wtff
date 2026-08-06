@@ -47,7 +47,7 @@ func finish(entries ...transcriptEntry) tea.Cmd {
 // planFunc produces a manifest for a scan step. Clean and uninstall's
 // leftover discovery each supply their own; the blocks below know nothing
 // about either, only that a manifest comes out.
-type planFunc func(deps *Deps) (*deletionengine.Manifest, int, error)
+type planFunc func(deps *Deps, progress func(done, total int)) (*deletionengine.Manifest, int, error)
 
 // scanBlock is the activity state while candidates are found and validated.
 // The spinner ticks on its own command, never on the scan itself, so a
@@ -58,12 +58,15 @@ type scanBlock struct {
 	theme    Theme
 	command  string
 	fn       planFunc
+	progress *progressCounter
 	activity activityIndicator
 }
 
 func newScanBlock(deps *Deps, theme Theme, command string, fn planFunc) *scanBlock {
+	progress := &progressCounter{}
 	return &scanBlock{deps: deps, theme: theme, command: command, fn: fn,
-		activity: newActivityIndicator("Scanning")}
+		progress: progress,
+		activity: newActivityIndicator("Scanning").withProgress(progress)}
 }
 
 type scanDoneMsg struct {
@@ -75,7 +78,7 @@ type scanDoneMsg struct {
 func (s *scanBlock) Init() tea.Cmd {
 	return tea.Batch(
 		func() tea.Msg {
-			manifest, skipped, err := s.fn(s.deps)
+			manifest, skipped, err := s.fn(s.deps, s.progress.report)
 			return scanDoneMsg{manifest: manifest, skipped: skipped, err: err}
 		},
 		s.activity.init(),
@@ -207,6 +210,7 @@ type applyBlock struct {
 	theme    Theme
 	command  string
 	manifest *deletionengine.Manifest
+	progress *progressCounter
 	activity activityIndicator
 }
 
@@ -219,8 +223,10 @@ func newApplyBlock(deps *Deps, theme Theme, command string, manifest *deletionen
 	if manifest.Action == deletionengine.ActionPurge {
 		label = "Deleting"
 	}
+	progress := &progressCounter{}
 	return &applyBlock{deps: deps, theme: theme, command: command, manifest: manifest,
-		activity: newActivityIndicator(label)}
+		progress: progress,
+		activity: newActivityIndicator(label).withProgress(progress)}
 }
 
 // purging reports whether this block removes permanently.
@@ -249,6 +255,7 @@ func (a *applyBlock) Init() tea.Cmd {
 			}
 			result, err := deletionengine.Apply(a.manifest, deletionengine.ApplyOptions{
 				Staging: staging, Policy: a.deps.Rules, Log: a.deps.Log,
+				Progress: a.progress.report,
 			})
 			return applyDoneMsg{result: result, err: err}
 		},

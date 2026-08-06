@@ -18,7 +18,7 @@ func startCleanFlow(deps *Deps, theme Theme) liveBlock {
 // and the non-interactive command are two presentations of identical
 // underlying behavior, not two independent implementations of "what does
 // clean do."
-func cleanPlan(deps *Deps) (*deletionengine.Manifest, int, error) {
+func cleanPlan(deps *Deps, progress func(done, total int)) (*deletionengine.Manifest, int, error) {
 	candidates, discoverySkips := cleancatalog.Discover(
 		cleancatalog.StageableEntries(deps.Catalog.Entries()), deps.Home)
 
@@ -36,6 +36,7 @@ func cleanPlan(deps *Deps) (*deletionengine.Manifest, int, error) {
 		Policy:       deps.Rules,
 		Log:          deps.Log,
 		MeasureSizes: true,
+		Progress:     progress,
 		SkipSink: func(string, string) {
 			planSkipped++
 		},

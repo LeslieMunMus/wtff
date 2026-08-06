@@ -24,6 +24,10 @@ type ApplyOptions struct {
 	// manifest can be applied long after it was planned and the rule set may
 	// have changed in between.
 	Policy PolicyChecker
+
+	// Progress, when set, is called once per entry with how many have been
+	// handled and how many there are. Same goroutine caveat as PlanOptions.
+	Progress func(done, total int)
 }
 
 // Outcome describes what happened to one entry.
@@ -88,6 +92,9 @@ func Apply(manifest *Manifest, opts ApplyOptions) (*Result, error) {
 	}
 
 	for index, entry := range manifest.Entries {
+		if opts.Progress != nil {
+			opts.Progress(index, len(manifest.Entries))
+		}
 		outcome := applyEntry(entry, index+1, manifest, opts, self, batch, itemsFD)
 		result.Outcomes = append(result.Outcomes, outcome)
 

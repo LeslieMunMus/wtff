@@ -69,6 +69,36 @@ func NewApp(deps *Deps, hasDarkBackground bool, _ any) App {
 	}
 }
 
+// maxTranscriptEntries bounds how much history the shell keeps.
+//
+// A transcript that only ever grows is a memory leak with a slow fuse: a long
+// session running clean repeatedly accumulates an entry per command plus one
+// per result, each carrying its full path listing behind the disclosure
+// toggle. The oldest entries are dropped rather than the newest, because the
+// value of history falls off with age and the bottom of the transcript is
+// where a person is looking.
+//
+// The number is generous on purpose. It is a ceiling that stops unbounded
+// growth, not a scrollback budget anyone should notice hitting.
+const maxTranscriptEntries = 500
+
+// appendEntries adds to the transcript and enforces the ceiling.
+func (a *App) appendEntries(entries ...transcriptEntry) {
+	a.entries = append(a.entries, entries...)
+	if overflow := len(a.entries) - maxTranscriptEntries; overflow > 0 {
+		// Copied into a fresh array rather than resliced in place. Reslicing
+		// would leave the dropped entries reachable from the original backing
+		// array until the next time append outgrows it, so their strings would
+		// be released a reallocation later than they could be. The difference
+		// is modest and bounded, which is why no test asserts it: the check
+		// that would have to observe it cannot distinguish the two reliably,
+		// and a test that cannot fail for the right reason is worse than none.
+		kept := make([]transcriptEntry, len(a.entries)-overflow)
+		copy(kept, a.entries[overflow:])
+		a.entries = kept
+	}
+}
+
 // Init starts the cursor blinking, which is the shell's only standing signal
 // that the program is alive and waiting rather than busy or wedged.
 func (a App) Init() tea.Cmd { return textinput.Blink }
@@ -128,7 +158,7 @@ func (a App) resize(msg tea.WindowSizeMsg) App {
 		// The welcome box is the first transcript entry rather than a fixed
 		// header: it scrolls away as history accumulates, the way the
 		// reference application's own greeting does.
-		a.entries = append(a.entries, welcomeEntry(a.deps, a.theme, a.width-4))
+		a.appendEntries(welcomeEntry(a.deps, a.theme, a.width-4))
 	} else {
 		a.view.Width = contentWidth
 		a.view.Height = viewHeight
@@ -167,7 +197,7 @@ func (a *App) refresh(toBottom bool) {
 // applyFlow appends a flow's transcript entries and swaps the pinned block,
 // then re-lays out, since gaining or losing a block changes viewport height.
 func (a App) applyFlow(msg flowMsg) (tea.Model, tea.Cmd) {
-	a.entries = append(a.entries, msg.entries...)
+	a.appendEntries(msg.entries...)
 	var cmd tea.Cmd
 	if msg.setBlock {
 		a.block = msg.block
@@ -371,7 +401,7 @@ func (a App) submit(raw string) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	a.entries = append(a.entries, echoEntry(a.theme, typed))
+	a.appendEntries(echoEntry(a.theme, typed))
 
 	name, arg := typed, ""
 	if idx := strings.IndexByte(typed, ' '); idx >= 0 {
@@ -380,13 +410,13 @@ func (a App) submit(raw string) (tea.Model, tea.Cmd) {
 
 	found, ok := matchCommand(name)
 	if !ok {
-		a.entries = append(a.entries,
+		a.appendEntries(
 			errorEntry(a.theme, "unknown command: "+name+" · type / to browse"))
 		a.refresh(true)
 		return a, nil
 	}
 	if arg != "" && !found.takesArg {
-		a.entries = append(a.entries,
+		a.appendEntries(
 			errorEntry(a.theme, found.name+" takes no arguments"))
 		a.refresh(true)
 		return a, nil
@@ -397,7 +427,7 @@ func (a App) submit(raw string) (tea.Model, tea.Cmd) {
 		a.quitting = true
 		return a, tea.Quit
 	case "help":
-		a.entries = append(a.entries, helpEntry(a.theme))
+		a.appendEntries(helpEntry(a.theme))
 		a.refresh(true)
 		return a, nil
 	}
@@ -406,7 +436,7 @@ func (a App) submit(raw string) (tea.Model, tea.Cmd) {
 		// Reachable only if a command is added without a start function.
 		// Refusing cleanly beats a nil call taking the program down; this
 		// exact omission already happened once during development.
-		a.entries = append(a.entries,
+		a.appendEntries(
 			errorEntry(a.theme, found.name+" has no handler wired up"))
 		a.refresh(true)
 		return a, nil

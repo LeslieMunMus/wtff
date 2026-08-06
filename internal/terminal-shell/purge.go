@@ -20,7 +20,7 @@ func startPurgeFlow(deps *Deps, theme Theme) liveBlock {
 	return newScanBlock(deps, theme, "purge", purgePlan)
 }
 
-func purgePlan(deps *Deps) (*deletionengine.Manifest, int, error) {
+func purgePlan(deps *Deps, progress func(done, total int)) (*deletionengine.Manifest, int, error) {
 	entries := cleancatalog.PurgeableEntries(deps.Catalog.Entries())
 	if len(entries) == 0 {
 		return nil, 0, fmt.Errorf("no catalog entries are marked purgeable")
@@ -55,6 +55,7 @@ func purgePlan(deps *Deps) (*deletionengine.Manifest, int, error) {
 		Policy:       deps.Rules,
 		Log:          deps.Log,
 		MeasureSizes: true,
+		Progress:     progress,
 		SkipSink:     func(string, string) { skipped++ },
 	})
 	return manifest, skipped, err

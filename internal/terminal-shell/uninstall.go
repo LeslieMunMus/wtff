@@ -205,7 +205,7 @@ func (n *nameQueryBlock) View(theme Theme, width int) string {
 // internal/uninstall-core can justify with exact evidence, planned through
 // the same deletion engine call the non-interactive uninstall command uses.
 func leftoverPlanFor(app uninstallcore.InstalledApp) planFunc {
-	return func(deps *Deps) (*deletionengine.Manifest, int, error) {
+	return func(deps *Deps, progress func(done, total int)) (*deletionengine.Manifest, int, error) {
 		candidates := []deletionengine.Candidate{{
 			Path:   app.Path,
 			RuleID: "uninstall-application-bundle",
@@ -220,6 +220,7 @@ func leftoverPlanFor(app uninstallcore.InstalledApp) planFunc {
 			Policy:       deps.Rules,
 			Log:          deps.Log,
 			MeasureSizes: true,
+			Progress:     progress,
 			SkipSink: func(string, string) {
 				skipped++
 			},

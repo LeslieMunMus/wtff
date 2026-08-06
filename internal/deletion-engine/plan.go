@@ -76,6 +76,15 @@ type PlanOptions struct {
 	// to tell a person why their selection came back short, rather than sending
 	// them to a log file to find out, sets this.
 	SkipSink func(path, reason string)
+
+	// Progress, when set, is called once per candidate with how many have been
+	// considered and how many there are.
+	//
+	// Called from whatever goroutine is running the plan, so an interactive
+	// caller must not touch its own state from inside it. The shell's counter
+	// stores two atomics and lets its existing render tick read them, which
+	// keeps the engine free of any assumption about how the number is shown.
+	Progress func(done, total int)
 }
 
 // ErrNoPolicy is returned when planning is attempted without a policy checker.
@@ -120,7 +129,10 @@ func Plan(candidates []Candidate, opts PlanOptions) (*Manifest, error) {
 	// sizes rather than making a person wait for numbers they did not ask for.
 	measureDeadline := time.Now().Add(maxTotalMeasureDuration)
 
-	for _, candidate := range candidates {
+	for considered, candidate := range candidates {
+		if opts.Progress != nil {
+			opts.Progress(considered, len(candidates))
+		}
 		runOpts := opts
 		if opts.MeasureSizes && time.Now().After(measureDeadline) {
 			runOpts.MeasureSizes = false

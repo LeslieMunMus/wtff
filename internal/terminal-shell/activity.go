@@ -20,15 +20,18 @@ import (
 // project manager rejected an earlier multi-line animated canvas here, and
 // the supplied reference for this element is a single compact status line.
 //
-// It shows elapsed time, not progress. The execution-metrics brief for this
-// line, a live "cleaned so far of total" figure alongside the timer, needs
-// the deletion engine to report partial results while it works, which is
-// the deferred core fix; when that lands, this line is where the figure
-// goes.
+// Alongside the timer it shows a live "so far of total" figure once the work
+// reports one. Elapsed time says the program is alive; the counter says the
+// work is actually advancing, which is the difference between a slow scan and
+// a stuck one.
 type activityIndicator struct {
 	spin      spinner.Model
 	label     string
 	startedAt time.Time
+
+	// progress is read on every render tick, never stored to from here. It is
+	// nil for work that cannot report a total.
+	progress *progressCounter
 }
 
 func newActivityIndicator(label string) activityIndicator {
@@ -37,6 +40,12 @@ func newActivityIndicator(label string) activityIndicator {
 		spinner.WithStyle(lipgloss.NewStyle().Foreground(brandTheme.Accent)),
 	)
 	return activityIndicator{spin: s, label: label, startedAt: time.Now()}
+}
+
+// withProgress attaches a counter the work will report into.
+func (a activityIndicator) withProgress(counter *progressCounter) activityIndicator {
+	a.progress = counter
+	return a
 }
 
 func (a activityIndicator) init() tea.Cmd {
@@ -55,7 +64,12 @@ func (a activityIndicator) update(msg tea.Msg) (activityIndicator, tea.Cmd) {
 // view renders the single status line.
 func (a activityIndicator) view(theme Theme) string {
 	elapsed := time.Since(a.startedAt).Round(time.Second)
-	status := lipgloss.NewStyle().Foreground(theme.Muted).
-		Render(fmt.Sprintf("%s · %s", a.label, elapsed))
+	text := fmt.Sprintf("%s · %s", a.label, elapsed)
+	if a.progress != nil {
+		if counted := a.progress.label(); counted != "" {
+			text = fmt.Sprintf("%s · %s · %s", a.label, counted, elapsed)
+		}
+	}
+	status := lipgloss.NewStyle().Foreground(theme.Muted).Render(text)
 	return a.spin.View() + "  " + status
 }

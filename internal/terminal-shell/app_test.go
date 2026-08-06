@@ -391,3 +391,55 @@ func TestDetectThemeReturnsTheBrandPalette(t *testing.T) {
 		}
 	}
 }
+
+// A transcript that only ever grows is a memory leak with a slow fuse. The
+// ceiling drops the oldest, since the bottom is where a person is looking.
+func TestTranscriptIsBounded(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
+
+	for i := 0; i < maxTranscriptEntries*2; i++ {
+		app.appendEntries(infoEntry(app.theme, "entry"))
+	}
+	if len(app.entries) > maxTranscriptEntries {
+		t.Fatalf("transcript grew to %d entries, ceiling is %d",
+			len(app.entries), maxTranscriptEntries)
+	}
+}
+
+// The newest entries are what survive trimming, or a person loses the result
+// they just asked for while old history is kept.
+func TestTranscriptKeepsTheNewestEntries(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
+
+	for i := 0; i < maxTranscriptEntries+50; i++ {
+		app.appendEntries(infoEntry(app.theme, "filler"))
+	}
+	app.appendEntries(successEntry(app.theme, "the newest result"))
+
+	last := app.entries[len(app.entries)-1].render(app.theme)
+	if !strings.Contains(last, "the newest result") {
+		t.Fatal("the newest entry should survive trimming")
+	}
+	if len(app.entries) > maxTranscriptEntries {
+		t.Fatalf("transcript is %d entries, ceiling is %d",
+			len(app.entries), maxTranscriptEntries)
+	}
+}
+
+// Ordinary sessions must be nowhere near the ceiling, or it is a scrollback
+// budget rather than a safety net.
+func TestAnOrdinarySessionIsNotTrimmed(t *testing.T) {
+	deps := testDeps(t, t.TempDir())
+	app := newTestApp(t, deps)
+
+	for i := 0; i < 20; i++ {
+		app = typeInto(app, "help")
+		app, _ = pressEnter(app)
+	}
+	if len(app.entries) >= maxTranscriptEntries {
+		t.Fatalf("twenty commands produced %d entries, too close to the %d ceiling",
+			len(app.entries), maxTranscriptEntries)
+	}
+}

@@ -54,7 +54,7 @@ func TestCleanFlowStagesARealFile(t *testing.T) {
 	writeTestFile(t, target, "reclaimable content")
 	deps := testDeps(t, home)
 
-	plan := func(d *Deps) (*deletionengine.Manifest, int, error) {
+	plan := func(d *Deps, _ func(done, total int)) (*deletionengine.Manifest, int, error) {
 		manifest, err := deletionengine.Plan(
 			[]deletionengine.Candidate{{Path: target, RuleID: "test-rule", Reason: "test candidate"}},
 			deletionengine.PlanOptions{Command: "test", Policy: d.Rules, Log: d.Log, MeasureSizes: true},
@@ -130,7 +130,7 @@ func TestCleanFlowRespectsProtectionRules(t *testing.T) {
 	writeTestFile(t, filepath.Join(keychain, "login.keychain-db"), "credential material")
 	deps := testDeps(t, home)
 
-	plan := func(d *Deps) (*deletionengine.Manifest, int, error) {
+	plan := func(d *Deps, _ func(done, total int)) (*deletionengine.Manifest, int, error) {
 		var skipped int
 		manifest, err := deletionengine.Plan(
 			[]deletionengine.Candidate{{Path: keychain, RuleID: "test-rule", Reason: "test candidate"}},
