@@ -69,6 +69,23 @@ func runUninstall(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		return 1
 	}
 
+	// Root level components are reported before the plan rather than after the
+	// removal. wtff runs unprivileged by design and cannot remove these, so the
+	// honest thing is to say what will survive while the choice is still open.
+	if leftovers := uninstallcore.InspectSystemIntegration(app, apps); leftovers.Orphans() {
+		fmt.Fprintf(stdout, "note: removing %s leaves privileged components behind, "+
+			"which wtff cannot remove because it does not run with elevated privileges:\n",
+			app.DisplayName)
+		for _, path := range leftovers.PrivilegedHelpers {
+			fmt.Fprintf(stdout, "  helper  %s\n", path)
+		}
+		for _, path := range leftovers.LaunchDaemons {
+			fmt.Fprintf(stdout, "  job     %s\n", path)
+		}
+		fmt.Fprintln(stdout, "  remove these with sudo, or use the vendor's uninstaller.")
+		fmt.Fprintln(stdout)
+	}
+
 	candidates := []deletionengine.Candidate{{
 		Path:   app.Path,
 		RuleID: "uninstall-application-bundle",

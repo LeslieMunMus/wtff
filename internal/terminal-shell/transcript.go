@@ -75,6 +75,17 @@ func successEntry(theme Theme, text string, details ...string) transcriptEntry {
 	}
 }
 
+// warningEntry marks something a person should read before continuing, as
+// distinct from a failure. Its details carry the specifics behind the
+// disclosure toggle, so the headline stays one line.
+func warningEntry(theme Theme, text string, details ...string) transcriptEntry {
+	return transcriptEntry{
+		body: "  " + lipgloss.NewStyle().Foreground(theme.Warning).Render("! ") +
+			lipgloss.NewStyle().Foreground(theme.Body).Render(text),
+		details: details,
+	}
+}
+
 func errorEntry(theme Theme, text string) transcriptEntry {
 	return transcriptEntry{body: "  " + lipgloss.NewStyle().Foreground(theme.Danger).Render("✗ "+text)}
 }

@@ -30,7 +30,13 @@ func appSearchRoots(home string) []string {
 type appResolvedMsg struct {
 	query   string
 	matches []uninstallcore.InstalledApp
-	err     error
+
+	// all is every discovered application, carried alongside the matches so
+	// the leftover check can tell a component genuinely left behind from one
+	// another installed application still needs.
+	all []uninstallcore.InstalledApp
+
+	err error
 }
 
 func resolveAppCmd(deps *Deps, query string) tea.Cmd {
@@ -39,7 +45,8 @@ func resolveAppCmd(deps *Deps, query string) tea.Cmd {
 		if err != nil {
 			return appResolvedMsg{query: query, err: err}
 		}
-		return appResolvedMsg{query: query, matches: uninstallcore.FindApp(apps, query)}
+		return appResolvedMsg{query: query, all: apps,
+			matches: uninstallcore.FindApp(apps, query)}
 	}
 }
 
@@ -55,25 +62,49 @@ func handleResolved(deps *Deps, theme Theme, msg appResolvedMsg) tea.Cmd {
 	case 0:
 		return finish(errorEntry(theme, fmt.Sprintf("no installed application matches %q", msg.query)))
 	case 1:
-		return proceedWithApp(deps, theme, msg.matches[0])
+		return proceedWithApp(deps, theme, msg.matches[0], msg.all)
 	default:
-		return transition(newAppPickBlock(deps, theme, msg.matches))
+		return transition(newAppPickBlock(deps, theme, msg.matches, msg.all))
 	}
 }
 
 // proceedWithApp runs the protection check and, when allowed, hands off to
 // the shared scan flow over the application's own leftover plan.
-func proceedWithApp(deps *Deps, theme Theme, app uninstallcore.InstalledApp) tea.Cmd {
+func proceedWithApp(deps *Deps, theme Theme, app uninstallcore.InstalledApp,
+	allApps []uninstallcore.InstalledApp) tea.Cmd {
+
 	if reason, protected := uninstallcore.IsProtectedApp(app); protected {
 		return finish(errorEntry(theme, app.DisplayName+" cannot be uninstalled: "+reason))
 	}
+
+	entries := []transcriptEntry{
+		infoEntry(theme, fmt.Sprintf("Uninstalling %s (%s)", app.DisplayName, app.BundleID)),
+	}
+
+	// Root level components are reported before the plan rather than after the
+	// removal. wtff runs unprivileged by design and cannot remove these, so the
+	// honest thing is to say what will survive while the choice is still open.
+	if leftovers := uninstallcore.InspectSystemIntegration(app, allApps); leftovers.Orphans() {
+		var details []string
+		for _, path := range leftovers.PrivilegedHelpers {
+			details = append(details, "helper  "+path)
+		}
+		for _, path := range leftovers.LaunchDaemons {
+			details = append(details, "job     "+path)
+		}
+		details = append(details, "remove these with sudo, or use the vendor's uninstaller")
+		entries = append(entries, warningEntry(theme,
+			fmt.Sprintf("%d privileged component(s) will be left behind, which wtff "+
+				"cannot remove without elevated privileges", len(details)-1), details...))
+	}
+
 	return transition(
 		newScanBlock(deps, theme, "uninstall "+app.DisplayName, leftoverPlanFor(app)),
-		infoEntry(theme, fmt.Sprintf("Uninstalling %s (%s)", app.DisplayName, app.BundleID)),
+		entries...,
 	)
 }
 
-func newAppPickBlock(deps *Deps, theme Theme, matches []uninstallcore.InstalledApp) *pickBlock {
+func newAppPickBlock(deps *Deps, theme Theme, matches, all []uninstallcore.InstalledApp) *pickBlock {
 	rows := make([]string, len(matches))
 	for i, app := range matches {
 		rows[i] = fmt.Sprintf("%s  (%s)  %s", app.DisplayName, app.BundleID, app.Path)
@@ -83,7 +114,7 @@ func newAppPickBlock(deps *Deps, theme Theme, matches []uninstallcore.InstalledA
 		title: "uninstall · choose one",
 		rows:  rows,
 		choose: func(index int) tea.Cmd {
-			return proceedWithApp(deps, theme, matches[index])
+			return proceedWithApp(deps, theme, matches[index], all)
 		},
 		cancel: func() tea.Cmd {
 			return finish(cancelEntry(theme, "uninstall"))

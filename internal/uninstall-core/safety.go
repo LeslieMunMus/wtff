@@ -24,5 +24,40 @@ func IsProtectedApp(app InstalledApp) (reason string, protected bool) {
 		return "wtff does not uninstall Apple's own applications, identified by the " +
 			appleBundlePrefix + " bundle identifier prefix, regardless of where they are installed", true
 	}
+
+	// The system integration check runs here, inside the single function both
+	// front ends already call, rather than beside it. A second check that a
+	// caller has to remember is a check a caller will eventually forget, and
+	// the cost of forgetting this one is a driver or a security agent removed
+	// from under a running system.
+	if integration := InspectSystemIntegration(app, nil); integration.Disqualifying() {
+		return disqualifyingReason(app, integration), true
+	}
 	return "", false
+}
+
+// disqualifyingReason explains a refusal in terms of what was found, naming
+// the paths, so a person can check the claim rather than take wtff's word for
+// it and can go remove the thing deliberately if that is really the intent.
+func disqualifyingReason(app InstalledApp, integration SystemIntegration) string {
+	var what string
+	switch {
+	case len(integration.SystemExtensions) > 0 && len(integration.KernelExtensions) > 0:
+		what = "a system extension and a kernel extension"
+	case len(integration.SystemExtensions) > 0:
+		what = "a system extension"
+	default:
+		what = "a kernel extension"
+	}
+
+	paths := append(append([]string{}, integration.SystemExtensions...),
+		integration.KernelExtensions...)
+
+	return app.DisplayName + " installs " + what + ", so wtff will not remove it: " +
+		strings.Join(paths, ", ") +
+		". Software that loads code into the system is where an incomplete removal " +
+		"stops being an inconvenience, and this category covers drivers, network " +
+		"filters, and endpoint security agents, which macOS requires to ship this " +
+		"way. Use the vendor's own uninstaller, which knows how to unload the " +
+		"extension before deleting what provides it."
 }
