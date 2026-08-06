@@ -45,7 +45,19 @@ check: ## Everything that must pass before a change is done
 		|| { echo "gofmt needs to run on:"; gofmt -l ./cmd ./internal; exit 1; }
 	go vet ./...
 	go test ./...
+	@$(MAKE) --no-print-directory cross-check
 	@$(MAKE) --no-print-directory dash-scan
+
+.PHONY: cross-check
+cross-check: ## Verify the Intel build compiles and vets from an Apple silicon host
+	@# Free hosted runners are Apple silicon only, so nothing else here ever
+	@# compiles the Intel path. This will not catch a runtime difference, and
+	@# does catch the build level breakage that an architecture specific type
+	@# or syscall signature introduces, which is the failure that would
+	@# otherwise reach a release archive unnoticed.
+	GOOS=darwin GOARCH=amd64 go build ./...
+	GOOS=darwin GOARCH=amd64 go vet ./...
+	GOOS=darwin GOARCH=arm64 go build ./...
 
 .PHONY: dash-scan
 dash-scan: ## Refuse em dashes and en dashes anywhere in the project

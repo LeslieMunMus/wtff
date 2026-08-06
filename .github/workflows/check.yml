@@ -14,13 +14,26 @@ jobs:
     # macOS, because wtff is a macOS tool: it uses descriptor relative syscalls
     # and resolves real system paths, and a Linux runner would report a green
     # build for behavior this project never runs on.
-    runs-on: macos-latest
+    #
+    # Two versions, both Apple silicon, because those are the free hosted
+    # images. Runner labels were read from actions/runner-images rather than
+    # assumed: macos-latest is macOS 26 on arm64, macos-15 is the previous
+    # release, and macos-14 is deprecated. Intel images exist only as -intel
+    # and -large variants, which bill at a higher rate, so real Intel runtime
+    # coverage is a paid decision rather than an oversight. The cross build
+    # step below is what stands in for it meanwhile.
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-26]
+
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - uses: actions/checkout@v4
         with:
-          # The Makefile stamps the version from git describe, which needs
-          # history rather than the default shallow clone.
+          # The Makefile stamps the version from git describe, which has
+          # nothing to describe in the default shallow clone.
           fetch-depth: 0
 
       - uses: actions/setup-go@v5
@@ -28,11 +41,20 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Report what this runner actually is
+        run: |
+          sw_vers
+          uname -m
+          go version
+
       - name: Verify formatting, vet, tests, and the em dash rule
         run: make check
 
       - name: Run the suite under the race detector
         run: make race
+
+      - name: Verify the Intel build compiles and vets
+        run: make cross-check
 
       - name: Confirm the binary builds and reports its version
         run: |
