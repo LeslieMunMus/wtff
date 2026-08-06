@@ -66,6 +66,20 @@ type Writer struct {
 	closed  bool
 }
 
+// maxLogBytes is when the active log is rotated, and keptLogFiles is how many
+// older ones survive.
+//
+// Four mebibytes is roughly twenty thousand events, and a busy clean writes a
+// few hundred, so a rotation covers on the order of a hundred runs and the
+// five kept files cover several hundred. The ceiling on disk is twenty
+// mebibytes, which is the point: this file previously grew without limit, and
+// an audit trail nobody can afford to keep is one that eventually gets deleted
+// wholesale.
+const (
+	maxLogBytes  = 4 << 20
+	keptLogFiles = 5
+)
+
 // DefaultPath returns the conventional log location for the invoking user.
 func DefaultPath() (string, error) {
 	home, err := os.UserHomeDir()
@@ -84,11 +98,54 @@ func Open(path, command string) (*Writer, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("cannot create log directory: %w", err)
 	}
+
+	// Rotation is decided once here rather than checked on every record. A
+	// single run writes a few hundred lines, so it cannot outgrow the limit
+	// between one open and the next, and a stat per line would buy nothing for
+	// its cost. A failure to rotate is remembered rather than raised: the
+	// operation the caller actually asked for should not fail over
+	// bookkeeping, and Err reports it at the end of the run.
+	rotateErr := rotate(path)
+
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("cannot open log: %w", err)
 	}
-	return &Writer{file: file, command: command}, nil
+	return &Writer{file: file, command: command, lastErr: rotateErr}, nil
+}
+
+// rotate moves an oversized log aside, shifting the previously rotated files
+// along and dropping the oldest.
+//
+// Renaming rather than truncating is what makes this safe to do while another
+// wtff run holds the file open. That run keeps writing through its existing
+// descriptor, and its records land in the renamed file rather than being lost.
+// Truncating in place would discard whatever it had already written.
+func rotate(path string) error {
+	info, err := os.Stat(path)
+	if err != nil || info.Size() < maxLogBytes {
+		// Absent or still small. An unreadable log is not reported here,
+		// because opening it immediately afterwards will report it better.
+		return nil
+	}
+
+	if err := os.Remove(numbered(path, keptLogFiles)); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("cannot drop the oldest log: %w", err)
+	}
+	for i := keptLogFiles - 1; i >= 1; i-- {
+		from, to := numbered(path, i), numbered(path, i+1)
+		if err := os.Rename(from, to); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("cannot rotate %s: %w", filepath.Base(from), err)
+		}
+	}
+	if err := os.Rename(path, numbered(path, 1)); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("cannot rotate the log: %w", err)
+	}
+	return nil
+}
+
+func numbered(path string, n int) string {
+	return fmt.Sprintf("%s.%d", path, n)
 }
 
 // Discard returns a writer that accepts events and drops them, for tests and
