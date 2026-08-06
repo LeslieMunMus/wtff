@@ -62,10 +62,10 @@ field on every entry.
 Run before any change is considered complete:
 
 ```bash
-gofmt -l .          # must print nothing
-go vet ./...
-go test ./...
+make check          # gofmt, vet, the full suite, and the em dash scan
 ```
+
+`make help` lists every target. `make install` puts `wtff` on your PATH.
 
 Never claim a fix or a property holds because a test with a matching name passes. Confirm the
 test actually exercises the defect: run it against the code before the fix and see it fail, or

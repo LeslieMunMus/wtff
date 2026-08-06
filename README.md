@@ -9,17 +9,34 @@ cleanup tool, and it does not reuse code, comments, or curated data from any oth
 The safety core, every planned command, and the full-screen interactive shell are built and
 tested.
 
+## Install
+
 ```bash
-go build -o wtff ./cmd/wtff
-./wtff                                              # full-screen interactive shell
-./wtff clean --dry-run                              # preview reclaimable caches, changes nothing
-./wtff clean                                        # stages them, reversible
-./wtff uninstall --dry-run "App Name"               # preview an app and its leftovers
-./wtff uninstall "App Name"                         # stages it, reversible
-./wtff remove --dry-run ~/Library/Caches/some-app   # preview a specific path
-./wtff remove ~/Library/Caches/some-app             # stages it, reversible
-./wtff staged                                       # list what is staged
-./wtff undo <batch-id>                              # restore it
+make install
+```
+
+That builds with checks, stamps the version from git, and installs `wtff` into
+`$(go env GOPATH)/bin`. If that directory is not on your `PATH`, add it to `~/.zshrc`, which is
+the file an interactive zsh actually reads on macOS:
+
+```bash
+echo 'export PATH="$HOME/go/bin:$PATH"' >> ~/.zshrc
+```
+
+Open a new terminal and `wtff` works from anywhere, arguments included. `make run` builds and
+launches from the source tree instead, for the edit and try loop.
+
+```bash
+wtff                                              # full-screen interactive shell
+wtff clean --dry-run                              # preview reclaimable caches, changes nothing
+wtff clean                                        # stages them, reversible
+wtff uninstall --dry-run "App Name"               # preview an app and its leftovers
+wtff uninstall "App Name"                         # stages it, reversible
+wtff remove --dry-run ~/Library/Caches/some-app   # preview a specific path
+wtff purge --dry-run                              # preview emptying the Trash, permanent
+wtff staged                                       # list what is staged
+wtff undo <batch-id>                              # restore it
+wtff staged --purge <batch-id>                    # delete it permanently instead
 ```
 
 Implemented: structural path validation, the deletion engine with plan and apply, staging based
@@ -31,8 +48,8 @@ scriptable commands.
 
 `uninstall` matches by exact name or bundle identifier only, refuses Apple's own applications
 outright, and has no vendor-specific protected list yet for software such as VPN clients or
-endpoint security agents. The interactive shell only stages, reversibly; a permanent purge is
-available from the scriptable commands with `--purge`, not from the shell.
+endpoint security agents. The interactive shell can now delete permanently as well as stage, gated behind typing a
+confirmation word.
 
 See `docs/decisions/` for a numbered record of what was decided and why, and
 `docs/architecture/` for how the pieces fit together. Every package documents itself in its own

@@ -34,6 +34,13 @@ type App struct {
 	paletteActive bool
 	paletteCursor int
 
+	// dragging is true while the scrollbar thumb is held. dragGrab is how far
+	// below the thumb's top the pointer took hold, so the thumb keeps its
+	// position under the pointer instead of jumping its top to the cursor on
+	// the first movement.
+	dragging bool
+	dragGrab int
+
 	width, height int
 	ready         bool
 	quitting      bool
@@ -75,13 +82,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.applyFlow(msg)
 
 	case tea.MouseMsg:
-		// The wheel scrolls the transcript, mid-flow included. These messages
-		// previously reached nothing at all: the type switch had no case for
-		// them and the fallthrough only fed a running block, so the wheel was
-		// silently inert and the transcript looked unscrollable.
-		var cmd tea.Cmd
-		a.view, cmd = a.view.Update(msg)
-		return a, cmd
+		return a.handleMouse(msg)
 
 	case tea.KeyMsg:
 		return a.handleKey(msg)
@@ -180,6 +181,71 @@ func (a App) applyFlow(msg flowMsg) (tea.Model, tea.Cmd) {
 		a.refresh(true)
 	}
 	return a, cmd
+}
+
+// handleMouse routes pointer input: the wheel scrolls, and the scrollbar can
+// be grabbed and dragged.
+//
+// These messages previously reached nothing at all. The type switch had no
+// case for them and the fallthrough only fed a running block, so the wheel was
+// silently inert and the transcript looked unscrollable.
+func (a App) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	switch msg.Action {
+	case tea.MouseActionPress:
+		// The wheel arrives as a press too, so the button is what separates a
+		// grab from a scroll rather than the action alone.
+		if msg.Button == tea.MouseButtonLeft && a.onScrollbar(msg.X, msg.Y) {
+			return a.beginDrag(msg.Y), nil
+		}
+
+	case tea.MouseActionMotion:
+		if a.dragging {
+			a.scrollThumbTo(msg.Y - a.dragGrab)
+			return a, nil
+		}
+
+	case tea.MouseActionRelease:
+		if a.dragging {
+			a.dragging = false
+			return a, nil
+		}
+	}
+
+	var cmd tea.Cmd
+	a.view, cmd = a.view.Update(msg)
+	return a, cmd
+}
+
+// onScrollbar reports whether a point falls in the scrollbar's columns beside
+// the transcript. The transcript occupies the top of the screen, so the
+// scrollbar's rows run from zero to the viewport's height.
+func (a App) onScrollbar(x, y int) bool {
+	return x >= a.width-scrollbarWidth && x < a.width && y >= 0 && y < a.view.Height
+}
+
+// beginDrag takes hold of the thumb. Pressing the track jumps the thumb to the
+// pointer and grabs it at its middle, which is what makes a click on empty
+// track behave like "scroll to here" rather than doing nothing.
+func (a App) beginDrag(y int) App {
+	start, size := scrollbarThumb(a.view.Height, a.view.TotalLineCount(), a.view.YOffset)
+	if size == 0 {
+		return a
+	}
+
+	a.dragging = true
+	if y >= start && y < start+size {
+		a.dragGrab = y - start
+		return a
+	}
+
+	a.dragGrab = size / 2
+	a.scrollThumbTo(y - a.dragGrab)
+	return a
+}
+
+// scrollThumbTo moves the transcript so the thumb's top sits at the given row.
+func (a *App) scrollThumbTo(thumbTop int) {
+	a.view.SetYOffset(offsetForThumbTop(a.view.Height, a.view.TotalLineCount(), thumbTop))
 }
 
 func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

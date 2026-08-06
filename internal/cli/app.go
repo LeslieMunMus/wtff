@@ -41,9 +41,13 @@ func detectDarkBackground() bool {
 	return lipgloss.HasDarkBackground()
 }
 
-// Version is wtff's version string. There is no released version yet; this
-// value exists so every build reports something rather than an empty string.
-const Version = "0.1.0-dev"
+// Version is wtff's version string, overridable at link time by the Makefile
+// so a build reports the commit it came from.
+//
+// A var rather than a const on purpose: the linker's -X flag can only write to
+// a variable, and against a constant it fails silently, leaving every build
+// claiming the same version while appearing to work.
+var Version = "0.1.0-dev"
 
 // Run dispatches a command line invocation and returns the process exit code.
 //

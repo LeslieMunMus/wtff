@@ -28,18 +28,43 @@ func TestScrollbarIsBlankWhenEverythingFits(t *testing.T) {
 	if len(lines) != 10 {
 		t.Fatalf("scrollbar has %d lines, want 10", len(lines))
 	}
-	if strings.ContainsAny(bar, "┃│") {
+	if strings.Contains(bar, scrollbarCell) {
 		t.Fatal("a transcript that fits should show no bar")
+	}
+	for i, line := range lines {
+		if lipgloss.Width(line) != scrollbarWidth {
+			t.Fatalf("blank line %d is %d wide, want %d",
+				i, lipgloss.Width(line), scrollbarWidth)
+		}
 	}
 }
 
 func TestScrollbarShowsThumbAndTrackWhenContentOverflows(t *testing.T) {
+	withColor(t)
+
 	bar := renderScrollbar(brandTheme, 10, 100, 0)
-	if !strings.Contains(bar, "┃") {
+	thumb := lipgloss.NewStyle().Foreground(brandTheme.Accent).
+		Render(strings.Repeat(scrollbarCell, scrollbarWidth))
+	track := lipgloss.NewStyle().Foreground(brandTheme.Highlight).
+		Render(strings.Repeat(scrollbarCell, scrollbarWidth))
+
+	if !strings.Contains(bar, thumb) {
 		t.Fatal("an overflowing transcript needs a thumb")
 	}
-	if !strings.Contains(bar, "│") {
+	if !strings.Contains(bar, track) {
 		t.Fatal("an overflowing transcript needs a track")
+	}
+}
+
+// The bar is a pointer target, not a hairline, so its width is pinned.
+func TestScrollbarIsThickEnoughToGrab(t *testing.T) {
+	if scrollbarWidth < 2 {
+		t.Fatalf("scrollbar is %d column(s), too thin to grab", scrollbarWidth)
+	}
+	for _, line := range strings.Split(renderScrollbar(brandTheme, 8, 80, 0), "\n") {
+		if lipgloss.Width(line) != scrollbarWidth {
+			t.Fatalf("line is %d wide, want %d", lipgloss.Width(line), scrollbarWidth)
+		}
 	}
 }
 
@@ -48,24 +73,25 @@ func TestScrollbarShowsThumbAndTrackWhenContentOverflows(t *testing.T) {
 func TestScrollbarThumbMovesWithTheOffset(t *testing.T) {
 	const height, total = 10, 100
 
-	top := strings.Split(renderScrollbar(brandTheme, height, total, 0), "\n")
-	bottom := strings.Split(renderScrollbar(brandTheme, height, total, total-height), "\n")
+	topStart, topSize := scrollbarThumb(height, total, 0)
+	if topStart != 0 || topSize < 1 {
+		t.Fatalf("at the top the thumb should start at row 0, got %d size %d",
+			topStart, topSize)
+	}
 
-	if !strings.Contains(top[0], "┃") {
-		t.Fatal("at the top the thumb should sit on the first line")
+	endStart, endSize := scrollbarThumb(height, total, total-height)
+	if endStart+endSize != height {
+		t.Fatalf("at the bottom the thumb should reach the last row, got %d+%d of %d",
+			endStart, endSize, height)
 	}
-	if !strings.Contains(bottom[height-1], "┃") {
-		t.Fatal("at the bottom the thumb should reach the last line")
-	}
-	if strings.Contains(bottom[0], "┃") {
-		t.Fatal("at the bottom the thumb should have left the first line")
+	if endStart == 0 {
+		t.Fatal("at the bottom the thumb should have left the first row")
 	}
 }
 
 // A very long transcript must not shrink the thumb out of existence.
 func TestScrollbarThumbNeverVanishes(t *testing.T) {
-	bar := renderScrollbar(brandTheme, 10, 100000, 500)
-	if !strings.Contains(bar, "┃") {
+	if _, size := scrollbarThumb(10, 100000, 500); size < 1 {
 		t.Fatal("the thumb must remain visible on a very long transcript")
 	}
 }
@@ -74,14 +100,80 @@ func TestScrollbarUsesTheBrandColors(t *testing.T) {
 	withColor(t)
 
 	bar := renderScrollbar(brandTheme, 10, 100, 0)
-	thumb := lipgloss.NewStyle().Foreground(brandTheme.Accent).Render("┃")
-	track := lipgloss.NewStyle().Foreground(brandTheme.Highlight).Render("│")
+	cells := strings.Repeat(scrollbarCell, scrollbarWidth)
+	thumb := lipgloss.NewStyle().Foreground(brandTheme.Accent).Render(cells)
+	track := lipgloss.NewStyle().Foreground(brandTheme.Highlight).Render(cells)
 
 	if !strings.Contains(bar, thumb) {
 		t.Fatal("the thumb should carry the main color")
 	}
 	if !strings.Contains(bar, track) {
 		t.Fatal("the track should carry the highlight color")
+	}
+}
+
+// Rendering and dragging are inverses. If they disagree, the thumb does not
+// stay under the pointer, which is the whole feel of a draggable bar.
+func TestThumbPositionRoundTripsThroughTheDragMath(t *testing.T) {
+	const height, total = 12, 200
+
+	for offset := 0; offset <= total-height; offset++ {
+		start, size := scrollbarThumb(height, total, offset)
+		if size == 0 {
+			t.Fatal("expected a thumb")
+		}
+		if start < 0 || start+size > height {
+			t.Fatalf("offset %d put the thumb at %d..%d, outside 0..%d",
+				offset, start, start+size, height)
+		}
+
+		// The property that makes a drag feel right: dropping the thumb on a
+		// row must render it on that same row. Neighbouring offsets can share
+		// a row, so the offsets need not match, but the rendered row must.
+		landed := offsetForThumbTop(height, total, start)
+		if again, _ := scrollbarThumb(height, total, landed); again != start {
+			t.Fatalf("thumb dropped on row %d re-renders on row %d "+
+				"(offset %d mapped back to %d)", start, again, offset, landed)
+		}
+	}
+}
+
+// Dragging down a row then reading the thumb back must not creep. Truncating
+// the inverse made every drag land one row above the drop point, so a slow
+// drag lost ground continuously.
+func TestDraggingDoesNotCreep(t *testing.T) {
+	const height, total = 12, 200
+
+	for row := 0; row <= height; row++ {
+		offset := offsetForThumbTop(height, total, row)
+		start, size := scrollbarThumb(height, total, offset)
+		if size == 0 {
+			t.Fatal("expected a thumb")
+		}
+		// Rows past the end of travel clamp, which is correct rather than creep.
+		if start != row && start+size != height {
+			t.Fatalf("dropping the thumb on row %d rendered it on row %d", row, start)
+		}
+	}
+}
+
+func TestDragMathClampsToTheEnds(t *testing.T) {
+	const height, total = 10, 100
+
+	if got := offsetForThumbTop(height, total, -50); got != 0 {
+		t.Fatalf("dragging above the top gave offset %d, want 0", got)
+	}
+	if got := offsetForThumbTop(height, total, 999); got != total-height {
+		t.Fatalf("dragging past the bottom gave offset %d, want %d", got, total-height)
+	}
+}
+
+func TestDragMathIsSafeWhenNothingScrolls(t *testing.T) {
+	if got := offsetForThumbTop(10, 5, 3); got != 0 {
+		t.Fatalf("a transcript that fits should stay at offset 0, got %d", got)
+	}
+	if _, size := scrollbarThumb(10, 5, 0); size != 0 {
+		t.Fatal("a transcript that fits should have no thumb")
 	}
 }
 
@@ -104,6 +196,165 @@ func TestMouseWheelScrollsTheTranscript(t *testing.T) {
 	model, _ := app.Update(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonWheelUp})
 	if model.(App).view.YOffset >= before {
 		t.Fatal("the wheel should scroll the transcript up")
+	}
+}
+
+// longApp returns a ready app whose transcript overflows, so there is
+// something to scroll and a thumb to grab.
+func longApp(t *testing.T) App {
+	t.Helper()
+	app := newTestApp(t, testDeps(t, t.TempDir()))
+	for i := 0; i < 200; i++ {
+		app.entries = append(app.entries, infoEntry(app.theme, "line of history"))
+	}
+	app.refresh(true)
+	return app
+}
+
+func press(app App, x, y int) App {
+	model, _ := app.Update(tea.MouseMsg{
+		Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, X: x, Y: y})
+	return model.(App)
+}
+
+func dragTo(app App, x, y int) App {
+	model, _ := app.Update(tea.MouseMsg{
+		Action: tea.MouseActionMotion, Button: tea.MouseButtonLeft, X: x, Y: y})
+	return model.(App)
+}
+
+func TestDraggingTheThumbScrollsTheTranscript(t *testing.T) {
+	app := longApp(t)
+	barX := app.width - 1
+
+	start, _ := scrollbarThumb(app.view.Height, app.view.TotalLineCount(), app.view.YOffset)
+	app = press(app, barX, start)
+	if !app.dragging {
+		t.Fatal("pressing the thumb should begin a drag")
+	}
+
+	before := app.view.YOffset
+	app = dragTo(app, barX, 0)
+	if app.view.YOffset >= before {
+		t.Fatalf("dragging to the top should scroll up, offset went %d to %d",
+			before, app.view.YOffset)
+	}
+	if app.view.YOffset != 0 {
+		t.Fatalf("dragging to the very top should reach offset 0, got %d",
+			app.view.YOffset)
+	}
+}
+
+// The thumb must stay under the pointer rather than snapping its top to the
+// cursor, or a grab near the thumb's bottom jumps the view on first movement.
+func TestGrabbingTheThumbKeepsItUnderThePointer(t *testing.T) {
+	app := longApp(t)
+	barX := app.width - 1
+
+	start, size := scrollbarThumb(app.view.Height, app.view.TotalLineCount(), app.view.YOffset)
+	if size < 2 {
+		t.Skip("thumb too short to distinguish a grab offset")
+	}
+
+	grabRow := start + size - 1
+	app = press(app, barX, grabRow)
+	if app.dragGrab != size-1 {
+		t.Fatalf("grab offset = %d, want %d", app.dragGrab, size-1)
+	}
+	// Pressing without moving must not shift the view at all.
+	if newStart, _ := scrollbarThumb(app.view.Height, app.view.TotalLineCount(),
+		app.view.YOffset); newStart != start {
+		t.Fatalf("a press alone moved the thumb from %d to %d", start, newStart)
+	}
+}
+
+// Pressing empty track is a "scroll to here" gesture, the same as the system
+// scrollbar this is modelled on.
+func TestPressingTheTrackJumpsTheThumbThere(t *testing.T) {
+	app := longApp(t)
+	barX := app.width - 1
+
+	before := app.view.YOffset
+	app = press(app, barX, 0)
+	if app.view.YOffset >= before {
+		t.Fatalf("pressing the track near the top should scroll up, %d to %d",
+			before, app.view.YOffset)
+	}
+}
+
+func TestReleaseEndsTheDrag(t *testing.T) {
+	app := longApp(t)
+	barX := app.width - 1
+
+	app = press(app, barX, 2)
+	if !app.dragging {
+		t.Fatal("setup: expected a drag")
+	}
+
+	model, _ := app.Update(tea.MouseMsg{Action: tea.MouseActionRelease, X: barX, Y: 2})
+	app = model.(App)
+	if app.dragging {
+		t.Fatal("releasing should end the drag")
+	}
+
+	// Movement after release must not scroll.
+	before := app.view.YOffset
+	app = dragTo(app, barX, 0)
+	if app.view.YOffset != before {
+		t.Fatal("movement after release should not scroll")
+	}
+}
+
+// A click in the transcript is not a click on the bar, or selecting text
+// would fling the view around.
+func TestClickingTheTranscriptDoesNotStartADrag(t *testing.T) {
+	app := longApp(t)
+
+	app = press(app, 5, 3)
+	if app.dragging {
+		t.Fatal("a press in the transcript must not grab the scrollbar")
+	}
+}
+
+// The bar sits beside the transcript only. A press below it belongs to the
+// prompt band, not the scrollbar.
+func TestPressingBelowTheTranscriptDoesNotStartADrag(t *testing.T) {
+	app := longApp(t)
+
+	app = press(app, app.width-1, app.view.Height+2)
+	if app.dragging {
+		t.Fatal("a press below the transcript must not grab the scrollbar")
+	}
+}
+
+// The wheel arrives as a press too, so it must not be mistaken for a grab.
+func TestWheelOverTheScrollbarScrollsRatherThanGrabs(t *testing.T) {
+	app := longApp(t)
+
+	model, _ := app.Update(tea.MouseMsg{
+		Action: tea.MouseActionPress, Button: tea.MouseButtonWheelUp,
+		X: app.width - 1, Y: 3})
+	app = model.(App)
+
+	if app.dragging {
+		t.Fatal("the wheel must not begin a drag")
+	}
+}
+
+// Dragging works while a flow runs, the same as the wheel and the page keys.
+func TestDraggingWorksWhileAFlowRuns(t *testing.T) {
+	app := longApp(t)
+	app = typeInto(app, "uninstall")
+	app, _ = pressEnter(app)
+	if app.block == nil {
+		t.Fatal("setup: expected a running flow")
+	}
+
+	before := app.view.YOffset
+	app = press(app, app.width-1, app.view.Height-1)
+	app = dragTo(app, app.width-1, 0)
+	if app.view.YOffset >= before {
+		t.Fatal("the scrollbar should be draggable while a flow runs")
 	}
 }
 

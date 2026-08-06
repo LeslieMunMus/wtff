@@ -19,34 +19,35 @@ func renderKeyHints(theme Theme, pairs ...[2]string) string {
 	return strings.Join(parts, muted.Render(" · "))
 }
 
-// scrollbarWidth is the single column the scrollbar occupies. It is reserved
-// whether or not the bar is currently visible, so the transcript does not
-// reflow the moment content grows past one screen.
-const scrollbarWidth = 1
-
-// renderScrollbar draws the transcript's vertical scrollbar as one column of
-// height lines: a thumb in the main color over a track in the highlight color.
+// scrollbarWidth is how many columns the scrollbar occupies. Two, because a
+// single column reads as a hairline rather than a control, and because a
+// grabbable target one cell wide is easy to miss with a pointer.
 //
-// The viewport component has no scrollbar of its own, so without this a person
-// has no indication that anything exists above the fold, which is exactly how
-// a transcript that scrolls perfectly well reads as one that is stuck.
-func renderScrollbar(theme Theme, height, totalLines, offset int) string {
-	track := lipgloss.NewStyle().Foreground(theme.Highlight)
-	thumbStyle := lipgloss.NewStyle().Foreground(theme.Accent)
+// The columns are reserved whether or not the bar is visible, so the
+// transcript does not reflow the moment content grows past one screen.
+const scrollbarWidth = 2
 
-	if height <= 0 {
-		return ""
-	}
-	// Nothing to scroll: the column stays, blank, holding its place.
-	if totalLines <= height {
-		return strings.TrimSuffix(strings.Repeat(" \n", height), "\n")
+// scrollbarCell is drawn full width in both columns, so the bar reads as a
+// solid rail rather than a dotted line.
+const scrollbarCell = "█"
+
+// scrollbarThumb returns the thumb's top row and length for a given scroll
+// position, or a zero length when there is nothing to scroll.
+//
+// Rendering and dragging both go through here on purpose. They are inverses
+// of each other, and two separate implementations of the same arithmetic
+// drift, which shows up as a thumb that does not sit where the pointer left
+// it.
+func scrollbarThumb(height, totalLines, offset int) (start, size int) {
+	if height <= 0 || totalLines <= height {
+		return 0, 0
 	}
 
 	// The thumb's length is the visible fraction of the whole, floored at one
 	// line so it never disappears on a very long transcript.
-	thumb := height * height / totalLines
-	if thumb < 1 {
-		thumb = 1
+	size = height * height / totalLines
+	if size < 1 {
+		size = 1
 	}
 
 	maxOffset := totalLines - height
@@ -59,17 +60,72 @@ func renderScrollbar(theme Theme, height, totalLines, offset int) string {
 
 	// Positioned from the scroll offset rather than a percentage, so the
 	// bottom of the travel lands exactly at the bottom of the track.
-	start := 0
 	if maxOffset > 0 {
-		start = offset * (height - thumb) / maxOffset
+		start = offset * (height - size) / maxOffset
 	}
+	return start, size
+}
+
+// offsetForThumbTop is the inverse of scrollbarThumb: given where a person
+// dragged the thumb's top, it reports the scroll offset that puts it there.
+func offsetForThumbTop(height, totalLines, thumbTop int) int {
+	_, size := scrollbarThumb(height, totalLines, 0)
+	if size == 0 {
+		return 0
+	}
+	travel := height - size
+	if travel <= 0 {
+		return 0
+	}
+	if thumbTop < 0 {
+		thumbTop = 0
+	}
+	if thumbTop > travel {
+		thumbTop = travel
+	}
+
+	// Rounded up, not truncated. scrollbarThumb divides down, so each thumb
+	// row stands for a band of offsets, and truncating here lands on the
+	// largest offset of the band below: the thumb would render one row above
+	// where it was dropped, and creep upward on every drag. The smallest
+	// offset that renders at this row is the ceiling of the exact quotient.
+	maxOffset := totalLines - height
+	return (thumbTop*maxOffset + travel - 1) / travel
+}
+
+// renderScrollbar draws the transcript's vertical scrollbar: a thumb in the
+// main color over a track in the highlight color.
+//
+// The viewport component has no scrollbar of its own, so without this a person
+// has no indication that anything exists above the fold, which is exactly how
+// a transcript that scrolls perfectly well reads as one that is stuck.
+func renderScrollbar(theme Theme, height, totalLines, offset int) string {
+	if height <= 0 {
+		return ""
+	}
+
+	bar := strings.Repeat(scrollbarCell, scrollbarWidth)
+	blank := strings.Repeat(" ", scrollbarWidth)
+
+	start, size := scrollbarThumb(height, totalLines, offset)
+	if size == 0 {
+		// Nothing to scroll: the columns stay, blank, holding their place.
+		lines := make([]string, height)
+		for i := range lines {
+			lines[i] = blank
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	track := lipgloss.NewStyle().Foreground(theme.Highlight).Render(bar)
+	thumb := lipgloss.NewStyle().Foreground(theme.Accent).Render(bar)
 
 	lines := make([]string, height)
 	for i := range lines {
-		if i >= start && i < start+thumb {
-			lines[i] = thumbStyle.Render("┃")
+		if i >= start && i < start+size {
+			lines[i] = thumb
 		} else {
-			lines[i] = track.Render("│")
+			lines[i] = track
 		}
 	}
 	return strings.Join(lines, "\n")

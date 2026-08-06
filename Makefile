@@ -1,0 +1,59 @@
+BINARY := wtff
+CMD    := ./cmd/wtff
+
+# Version is stamped from git so a built binary can say what it came from.
+# A working tree with uncommitted changes is marked, because a binary that
+# reports a clean tag it does not actually match is worse than no version.
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS := -X github.com/lesliemusengi/wtff/internal/cli.Version=$(VERSION)
+
+.DEFAULT_GOAL := help
+
+.PHONY: help
+help: ## Show this list
+	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
+		| awk 'BEGIN{FS=":.*?## "}{printf "  \033[1m%-10s\033[0m %s\n", $$1, $$2}'
+
+.PHONY: build
+build: ## Build ./wtff in this directory
+	go build -ldflags '$(LDFLAGS)' -o $(BINARY) $(CMD)
+
+.PHONY: install
+install: check ## Install wtff onto your PATH, after checks pass
+	go install -ldflags '$(LDFLAGS)' $(CMD)
+	@echo "installed $(VERSION) to $$(go env GOPATH)/bin/$(BINARY)"
+
+.PHONY: run
+run: build ## Build and launch the shell
+	./$(BINARY)
+
+.PHONY: test
+test: ## Run the full suite
+	go test ./...
+
+.PHONY: race
+race: ## Run the full suite under the race detector
+	go test -race ./...
+
+.PHONY: fmt
+fmt: ## Format every package
+	gofmt -w ./cmd ./internal
+
+.PHONY: check
+check: ## Everything that must pass before a change is done
+	@test -z "$$(gofmt -l ./cmd ./internal)" \
+		|| { echo "gofmt needs to run on:"; gofmt -l ./cmd ./internal; exit 1; }
+	go vet ./...
+	go test ./...
+	@$(MAKE) --no-print-directory dash-scan
+
+.PHONY: dash-scan
+dash-scan: ## Refuse em dashes and en dashes anywhere in the project
+	@! grep -rlnP '\xe2\x80\x94|\xe2\x80\x93' \
+		--include='*.go' --include='*.md' --include='*.yaml' \
+		./cmd ./internal ./docs 2>/dev/null \
+		|| { echo "em or en dash found in the files above"; exit 1; }
+
+.PHONY: clean
+clean: ## Remove the locally built binary
+	rm -f $(BINARY)
