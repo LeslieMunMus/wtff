@@ -285,59 +285,90 @@ func TestStaleProvenanceIsNoted(t *testing.T) {
 	}
 }
 
-// Without the grant, wtff sees less than the person expects. It under reports
-// rather than removing something it cannot see, which is the safe direction
-// and a confusing one to be wrong in silently.
-func TestMissingFullDiskAccessIsExplained(t *testing.T) {
+// The check that replaced a misleading one. The old probe read Safari, Mail,
+// and Cookies to infer whether Full Disk Access was granted, and reported
+// locations invisible to wtff when wtff does not target those paths at all.
+// It prompted a person toward a broad permission grant that would have
+// changed nothing.
+func TestVisibilityReportsOnlyWhatWtffActuallyTargets(t *testing.T) {
+	opts := fixture(t)
+
+	// A location macOS protects, which wtff has no interest in.
+	unreadable := filepath.Join(opts.Home, "Library", "Safari")
+	if err := os.MkdirAll(unreadable, 0o755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	if err := os.Chmod(unreadable, 0o000); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(unreadable, 0o755) })
+
+	// A category wtff does target, readable.
+	if err := os.MkdirAll(filepath.Join(opts.Home, ".Trash"), 0o755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	report := Run(opts)
+	finding := find(t, report, "visibility")
+	if finding.Level != LevelOK {
+		t.Fatalf("an unreadable path wtff never targets must not be reported: %s: %s",
+			finding.Level, finding.Summary)
+	}
+	if report.NeedsAttention() {
+		t.Fatal("wtff being unable to read something it does not want is not a problem")
+	}
+	for _, line := range append(finding.Detail, finding.Summary) {
+		if strings.Contains(line, "Safari") {
+			t.Fatalf("the report mentions a path wtff does not target: %q", line)
+		}
+	}
+}
+
+// When something wtff genuinely wants is withheld, that is a real warning,
+// because clean will silently propose less than it should.
+func TestUnreadableTargetIsAWarning(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("running as root, which bypasses the permissions under test")
 	}
 	opts := fixture(t)
 
-	protected := filepath.Join(opts.Home, "Library", "Safari")
-	if err := os.MkdirAll(protected, 0o755); err != nil {
+	trash := filepath.Join(opts.Home, ".Trash")
+	if err := os.MkdirAll(trash, 0o755); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
-	if err := os.Chmod(protected, 0o000); err != nil {
+	if err := os.Chmod(trash, 0o000); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(protected, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(trash, 0o755) })
 
-	finding := find(t, Run(opts), "full disk access")
-	if finding.Level != LevelNote {
-		t.Fatalf("a missing grant is worth explaining, not a failure: %s", finding.Level)
-	}
-	if !strings.Contains(finding.Summary, "not granted") {
-		t.Fatalf("expected the grant to be reported missing, got %q", finding.Summary)
-	}
-	detail := strings.Join(finding.Detail, "\n")
-	if !strings.Contains(detail, "System Settings") {
-		t.Fatalf("the detail should say where to grant it, got %q", detail)
-	}
-	if !strings.Contains(detail, "under report") {
-		t.Fatalf("the detail should say what the consequence is, got %q", detail)
-	}
-}
-
-func TestReadableProtectedLocationsMeanAccessIsGranted(t *testing.T) {
-	opts := fixture(t)
-	if err := os.MkdirAll(filepath.Join(opts.Home, "Library", "Safari"), 0o755); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-
-	finding := find(t, Run(opts), "full disk access")
-	if finding.Level != LevelOK || !strings.Contains(finding.Summary, "granted") {
-		t.Fatalf("readable probes should report the grant, got %s: %s",
+	report := Run(opts)
+	finding := find(t, report, "visibility")
+	if finding.Level != LevelWarn {
+		t.Fatalf("an unreadable target should warn, got %s: %s",
 			finding.Level, finding.Summary)
 	}
+	if !strings.Contains(finding.Summary, "under report") {
+		t.Fatalf("the summary should say the consequence, got %q", finding.Summary)
+	}
+	detail := strings.Join(finding.Detail, "\n")
+	if !strings.Contains(detail, trash) {
+		t.Fatalf("the detail should name what cannot be read, got %q", detail)
+	}
+	if !strings.Contains(detail, "Full Disk Access") {
+		t.Fatalf("the detail should offer the likely remedy, got %q", detail)
+	}
+	if !report.NeedsAttention() {
+		t.Fatal("wtff being blocked from what it targets should need attention")
+	}
 }
 
-// A machine where none of the probes exist cannot be judged either way, and
-// saying so beats guessing.
-func TestUnknownFullDiskAccessSaysSo(t *testing.T) {
-	finding := find(t, Run(fixture(t)), "full disk access")
-	if finding.Level != LevelNote || !strings.Contains(finding.Summary, "cannot tell") {
-		t.Fatalf("expected an honest unknown, got %s: %s", finding.Level, finding.Summary)
+// A machine with none of the categories present is reported honestly rather
+// than as either healthy or broken.
+func TestVisibilityWithNoCategoriesPresent(t *testing.T) {
+	finding := find(t, Run(fixture(t)), "visibility")
+	if finding.Level != LevelNote || !strings.Contains(finding.Summary, "none of the categories") {
+		t.Fatalf("expected an honest nothing-to-check, got %s: %s",
+			finding.Level, finding.Summary)
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	cleancatalog "github.com/lesliemusengi/wtff/internal/clean-catalog"
@@ -106,7 +107,7 @@ func Run(opts Options) Report {
 	report.add(checkLog(opts)...)
 	report.add(checkRules(opts)...)
 	report.add(checkCatalog(opts)...)
-	report.add(checkFullDiskAccess(opts)...)
+	report.add(checkVisibility(opts)...)
 	return report
 }
 
@@ -348,57 +349,90 @@ func checkCatalog(opts Options) []Finding {
 	return findings
 }
 
-// fullDiskAccessProbes are locations macOS withholds from an application
-// without Full Disk Access. Confirmed denied on Darwin 25.6 from a terminal
-// that had not been granted it.
-var fullDiskAccessProbes = []string{
-	"Library/Safari",
-	"Library/Mail",
-	"Library/Cookies",
-}
-
-// checkFullDiskAccess reports whether wtff can see the whole home directory.
+// checkVisibility reports whether wtff can read the places it actually looks.
 //
-// This is the difference between a scan that found nothing and a scan that was
-// not allowed to look. Without the grant wtff silently under reports, which is
-// the safe direction to be wrong but a confusing one to be wrong in silently.
-func checkFullDiskAccess(opts Options) []Finding {
-	var denied []string
-	var present int
+// An earlier version of this check probed Safari, Mail, and Cookies to infer
+// whether Full Disk Access had been granted, then reported that "some
+// locations are invisible to wtff". That was misleading in the worst
+// direction: it prompted a person toward granting a broad permission that
+// would have bought them nothing, because wtff does not target those paths and
+// never has.
+//
+// wtff is an allowlist, not a scanner. It looks in the handful of places its
+// catalog names and nowhere else, so the question worth answering is not
+// whether a permission is granted but whether anything wtff actually wants is
+// being withheld. Those give opposite answers on a machine where the grant is
+// absent and every target is readable anyway, which is the ordinary case.
+func checkVisibility(opts Options) []Finding {
+	catalog, err := cleancatalog.LoadBuiltin()
+	if err != nil {
+		// The catalog check already reports this properly.
+		return nil
+	}
 
-	for _, probe := range fullDiskAccessProbes {
-		path := filepath.Join(opts.Home, probe)
-		if _, err := os.Lstat(path); err != nil {
-			// Absent rather than protected. Says nothing either way.
+	var denied, checked []string
+	for _, entry := range catalog.Entries() {
+		// The volume trash entry's path names where mount points appear, not
+		// a directory wtff removes anything from. Reading /Volumes says
+		// nothing about whether the trash on an attached drive is reachable,
+		// and counting it made an empty home report a category present.
+		if entry.Kind == cleancatalog.KindVolumeTrash {
 			continue
 		}
-		present++
+		path := expandHome(entry.Path, opts.Home)
+		if _, err := os.Lstat(path); err != nil {
+			// Absent is the ordinary case for most categories on most
+			// machines and says nothing about permissions.
+			continue
+		}
+		checked = append(checked, path)
 		if _, err := os.ReadDir(path); err != nil && os.IsPermission(err) {
 			denied = append(denied, path)
 		}
 	}
 
 	switch {
-	case present == 0:
+	case len(checked) == 0:
 		return []Finding{{
-			Area: "full disk access", Level: LevelNote,
-			Summary: "cannot tell, because none of the protected locations exist here",
+			Area: "visibility", Level: LevelNote,
+			Summary: "none of the categories wtff cleans exist on this machine",
 		}}
 	case len(denied) == 0:
 		return []Finding{{
-			Area: "full disk access", Level: LevelOK,
-			Summary: "granted, so wtff can see the whole home directory",
+			Area: "visibility", Level: LevelOK,
+			Summary: fmt.Sprintf("all %d categor%s present here are readable",
+				len(checked), plural(len(checked), "y", "ies")),
+			Detail: []string{
+				"wtff only looks in the places its catalog names, so nothing else being " +
+					"unreadable does not affect it",
+			},
 		}}
 	default:
 		return []Finding{{
-			Area: "full disk access", Level: LevelNote,
-			Summary: "not granted, so some locations are invisible to wtff",
+			Area: "visibility", Level: LevelWarn,
+			Summary: fmt.Sprintf("%d categor%s wtff cleans cannot be read, so it will under report",
+				len(denied), plural(len(denied), "y that", "ies that")),
 			Detail: append(denied,
-				"wtff will under report rather than remove something it cannot see, which is the safe direction",
-				"to see everything, grant Full Disk Access to your terminal in",
-				"System Settings, Privacy and Security, Full Disk Access"),
+				"wtff will leave these alone rather than remove something it cannot see, "+
+					"which is the safe direction to be wrong",
+				"if these are locations macOS protects, granting Full Disk Access to your "+
+					"terminal in System Settings, Privacy and Security would make them visible",
+			),
 		}}
 	}
+}
+
+// expandHome resolves a leading tilde against the supplied home directory
+// rather than the invoking user's, so a test can point the whole check
+// somewhere else.
+func expandHome(path, home string) string {
+	if path == "~" {
+		return home
+	}
+	if strings.HasPrefix(path, "~/") {
+		return filepath.Join(home, path[2:])
+	}
+	return path
 }
 
 // DefaultOptions resolves the paths wtff actually uses.
