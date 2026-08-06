@@ -40,8 +40,14 @@ type Theme struct {
 	// main color. Kept as its own field so call sites read as intent.
 	Border lipgloss.Color
 
-	// Highlight is the selected-row background.
+	// Highlight is the selected-row background, and the scrollbar track.
 	Highlight lipgloss.Color
+
+	// Placeholder is the prompt's suggestion text, deliberately lighter than
+	// Body so a person can tell at a glance whether the line holds a hint or
+	// something they actually typed. Without the separation, an empty prompt
+	// and a typed command read the same weight.
+	Placeholder lipgloss.Color
 }
 
 // brandTheme is the single palette, per the supplied theme specification.
@@ -54,14 +60,15 @@ type Theme struct {
 // Foregrounds, borders, and the row highlight are where the palette is
 // enforced from inside the program.
 var brandTheme = Theme{
-	Accent:    lipgloss.Color("#0A0AAE"),
-	Body:      lipgloss.Color("#3D3D3D"),
-	Muted:     lipgloss.Color("#BCBCFB"),
-	Success:   lipgloss.Color("#0AAE0A"),
-	Danger:    lipgloss.Color("#AE0A0A"),
-	Warning:   lipgloss.Color("#9A6700"),
-	Border:    lipgloss.Color("#0A0AAE"),
-	Highlight: lipgloss.Color("#E1E1FD"),
+	Accent:      lipgloss.Color("#0A0AAE"),
+	Body:        lipgloss.Color("#3D3D3D"),
+	Muted:       lipgloss.Color("#BCBCFB"),
+	Success:     lipgloss.Color("#0AAE0A"),
+	Danger:      lipgloss.Color("#AE0A0A"),
+	Warning:     lipgloss.Color("#9A6700"),
+	Border:      lipgloss.Color("#0A0AAE"),
+	Highlight:   lipgloss.Color("#E1E1FD"),
+	Placeholder: lipgloss.Color("#D6D6D6"),
 }
 
 // detectTheme now returns the brand palette unconditionally. The earlier

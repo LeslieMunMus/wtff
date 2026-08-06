@@ -13,11 +13,28 @@ import (
 
 // maxSizeWalkEntries bounds how many entries a directory measurement visits.
 //
-// Measuring is best effort and must never be the reason a plan hangs. A tree
-// larger than this is reported with the size measured so far and SizeKnown
-// false, so the manifest says the number is incomplete instead of presenting a
-// partial sum as a total.
+// A tree larger than this is reported with the size measured so far and
+// SizeKnown false, so the manifest says the number is incomplete instead of
+// presenting a partial sum as a total.
 const maxSizeWalkEntries = 500_000
+
+// maxSizeWalkDuration bounds how long one directory measurement may take, and
+// maxTotalMeasureDuration bounds the whole planning run's measuring.
+//
+// The entry cap alone does not bound time, which is the gap that produced a
+// real multi hour hang: it counts entries, and a walk stalled inside a single
+// filesystem call never reaches the next entry to be counted. A network mount
+// that stops answering, an unresponsive user space filesystem, or a disk going
+// to sleep all stall in exactly that way.
+//
+// A deadline checked between entries would not help either, for the same
+// reason, so the walk runs on its own goroutine and is abandoned if it does not
+// finish in time. The result is an honest "size unknown" rather than a plan
+// that never appears.
+const (
+	maxSizeWalkDuration     = 3 * time.Second
+	maxTotalMeasureDuration = 20 * time.Second
+)
 
 // Candidate is a proposed target, before validation.
 type Candidate struct {
@@ -97,8 +114,18 @@ func Plan(candidates []Candidate, opts PlanOptions) (*Manifest, error) {
 
 	seen := make(map[pathvalidation.Identity]string, len(candidates))
 
+	// A per-candidate deadline still allows a plan over many candidates to
+	// take their sum, which on a machine with a stalled mount is minutes. Once
+	// the run has spent this long measuring, the rest are planned without
+	// sizes rather than making a person wait for numbers they did not ask for.
+	measureDeadline := time.Now().Add(maxTotalMeasureDuration)
+
 	for _, candidate := range candidates {
-		entry, skipReason := evaluate(candidate, opts, self, seen)
+		runOpts := opts
+		if opts.MeasureSizes && time.Now().After(measureDeadline) {
+			runOpts.MeasureSizes = false
+		}
+		entry, skipReason := evaluate(candidate, runOpts, self, seen)
 		if skipReason != "" {
 			opts.Log.Record(operationlog.Event{
 				Command: opts.Command,
@@ -219,11 +246,51 @@ func measure(resolved *pathvalidation.Resolved) (int64, bool) {
 		return info, true
 	}
 
+	return measureWithin(maxSizeWalkDuration, func() (int64, bool) {
+		return walkSize(resolved.Path())
+	})
+}
+
+// measureWithin runs a measurement on its own goroutine and abandons it if it
+// does not finish in time, reporting the size as unknown.
+//
+// Abandoning rather than cancelling is deliberate. A stalled walk is blocked
+// inside a filesystem call that does not take a cancellation, so there is
+// nothing to signal; the only thing available is to stop waiting. The
+// abandoned goroutine owns its own accumulator, so nothing here reads a value
+// another goroutine is still writing, and the channel is buffered so that
+// goroutine can deliver and exit rather than blocking forever on a receiver
+// that has moved on.
+func measureWithin(limit time.Duration, walk func() (int64, bool)) (int64, bool) {
+	type measurement struct {
+		total    int64
+		complete bool
+	}
+
+	done := make(chan measurement, 1)
+	go func() {
+		total, complete := walk()
+		done <- measurement{total, complete}
+	}()
+
+	timer := time.NewTimer(limit)
+	defer timer.Stop()
+
+	select {
+	case result := <-done:
+		return result.total, result.complete
+	case <-timer.C:
+		return 0, false
+	}
+}
+
+// walkSize sums a directory tree, reporting whether the total is complete.
+func walkSize(root string) (int64, bool) {
 	var total int64
 	var visited int
 	complete := true
 
-	err := filepath.WalkDir(resolved.Path(), func(_ string, entry fs.DirEntry, err error) error {
+	err := filepath.WalkDir(root, func(_ string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			// An unreadable subtree makes the total a floor, not a total.
 			complete = false

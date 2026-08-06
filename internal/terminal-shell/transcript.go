@@ -52,8 +52,11 @@ func indentLines(s, prefix string) string {
 // echoEntry records the command a person typed, prompt glyph included, so
 // the transcript reads as the conversation it is.
 func echoEntry(theme Theme, typed string) transcriptEntry {
+	// The echoed command carries the main color, not body text. It is a
+	// heading for everything indented beneath it, and rendering it in the
+	// reading color made it read as near black against its own output.
 	return transcriptEntry{body: lipgloss.NewStyle().Foreground(theme.Accent).Bold(true).Render("❯ ") +
-		lipgloss.NewStyle().Foreground(theme.Body).Bold(true).Render(typed)}
+		lipgloss.NewStyle().Foreground(theme.Accent).Bold(true).Render(typed)}
 }
 
 func infoEntry(theme Theme, text string) transcriptEntry {

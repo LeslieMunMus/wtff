@@ -42,19 +42,28 @@ type App struct {
 // NewApp constructs the shell. hasDarkBackground is retained for the theme
 // hook even though the brand palette is currently unconditional.
 func NewApp(deps *Deps, hasDarkBackground bool, _ any) App {
+	theme := detectTheme(hasDarkBackground)
+
 	input := textinput.New()
 	input.Placeholder = "type a command, or / to browse"
 	input.Prompt = "❯ "
-	input.Focus()
 	input.CharLimit = 128
+	// The suggestion is styled apart from typed text on purpose: the two
+	// occupy the same cells, and without a weight difference an empty prompt
+	// and a real command read identically.
+	input.PlaceholderStyle = lipgloss.NewStyle().Foreground(theme.Placeholder)
+	input.Cursor.Style = lipgloss.NewStyle().Foreground(theme.Accent)
+	input.Focus()
 
 	return App{
 		deps:  deps,
-		theme: detectTheme(hasDarkBackground),
+		theme: theme,
 		input: input,
 	}
 }
 
+// Init starts the cursor blinking, which is the shell's only standing signal
+// that the program is alive and waiting rather than busy or wedged.
 func (a App) Init() tea.Cmd { return textinput.Blink }
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -65,17 +74,32 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case flowMsg:
 		return a.applyFlow(msg)
 
+	case tea.MouseMsg:
+		// The wheel scrolls the transcript, mid-flow included. These messages
+		// previously reached nothing at all: the type switch had no case for
+		// them and the fallthrough only fed a running block, so the wheel was
+		// silently inert and the transcript looked unscrollable.
+		var cmd tea.Cmd
+		a.view, cmd = a.view.Update(msg)
+		return a, cmd
+
 	case tea.KeyMsg:
 		return a.handleKey(msg)
 	}
 
-	// Anything else, spinner ticks above all, belongs to the running block.
+	// Anything else: spinner ticks to a running block, and cursor blink to the
+	// prompt. The blink messages are not key messages, so routing only to the
+	// block meant the cursor never animated once a flow had run.
+	var cmds []tea.Cmd
 	if a.block != nil {
 		updated, cmd := a.block.Update(msg)
 		a.block = updated
-		return a, cmd
+		cmds = append(cmds, cmd)
 	}
-	return a, nil
+	var inputCmd tea.Cmd
+	a.input, inputCmd = a.input.Update(msg)
+	cmds = append(cmds, inputCmd)
+	return a, tea.Batch(cmds...)
 }
 
 // resize recomputes the viewport, which owns its own height so the prompt
@@ -84,15 +108,23 @@ func (a App) resize(msg tea.WindowSizeMsg) App {
 	a.width, a.height = msg.Width, msg.Height
 	viewHeight := a.viewportHeight()
 
+	// The scrollbar's column is taken out of the viewport's own width rather
+	// than added beside it, so the two together occupy exactly the terminal
+	// width and nothing wraps.
+	contentWidth := a.width - scrollbarWidth
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
+
 	if !a.ready {
-		a.view = viewport.New(a.width, viewHeight)
+		a.view = viewport.New(contentWidth, viewHeight)
 		a.ready = true
 		// The welcome box is the first transcript entry rather than a fixed
 		// header: it scrolls away as history accumulates, the way the
 		// reference application's own greeting does.
 		a.entries = append(a.entries, welcomeEntry(a.deps, a.theme, a.width-4))
 	} else {
-		a.view.Width = a.width
+		a.view.Width = contentWidth
 		a.view.Height = viewHeight
 	}
 	a.refresh(true)
@@ -135,6 +167,12 @@ func (a App) applyFlow(msg flowMsg) (tea.Model, tea.Cmd) {
 		a.block = msg.block
 		if a.block != nil {
 			cmd = a.block.Init()
+		} else {
+			// The flow is over, so the prompt takes the cursor back. Focus
+			// follows where typing actually goes, which is the only honest
+			// place for a blinking cursor to be.
+			a.input.Focus()
+			cmd = textinput.Blink
 		}
 	}
 	if a.ready {
@@ -154,10 +192,20 @@ func (a App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Scrollback is always available, even mid-flow, so a person can read
 	// back over earlier output while something runs.
 	switch msg.Type {
-	case tea.KeyPgUp, tea.KeyPgDown:
+	case tea.KeyPgUp, tea.KeyPgDown, tea.KeyHome, tea.KeyEnd:
 		var cmd tea.Cmd
 		a.view, cmd = a.view.Update(msg)
 		return a, cmd
+	case tea.KeyUp, tea.KeyDown:
+		// The arrows scroll the transcript only when nothing else wants them.
+		// The palette uses them to move its cursor, and a live block owns the
+		// keyboard outright, so both are checked first. Page keys are not
+		// conditional this way because nothing else claims them.
+		if !a.paletteActive && a.block == nil {
+			var cmd tea.Cmd
+			a.view, cmd = a.view.Update(msg)
+			return a, cmd
+		}
 	}
 
 	// ctrl+o toggles the newest disclosure, keeping verbose output one
@@ -289,6 +337,9 @@ func (a App) submit(raw string) (tea.Model, tea.Cmd) {
 	}
 
 	a.block = found.start(a.deps, a.theme, arg)
+	// The block owns the keyboard now, so the prompt gives up its cursor
+	// rather than blinking at a place that would ignore what is typed there.
+	a.input.Blur()
 	a.view.Height = a.viewportHeight()
 	a.refresh(true)
 	return a, a.block.Init()
@@ -299,7 +350,12 @@ func (a App) View() string {
 		return ""
 	}
 
-	sections := []string{a.view.View()}
+	transcript := lipgloss.JoinHorizontal(lipgloss.Top,
+		a.view.View(),
+		renderScrollbar(a.theme, a.view.Height, a.view.TotalLineCount(), a.view.YOffset),
+	)
+
+	sections := []string{transcript}
 	if a.block != nil {
 		sections = append(sections,
 			lipgloss.NewStyle().Padding(0, 2).Render(a.block.View(a.theme, a.width-2)))
