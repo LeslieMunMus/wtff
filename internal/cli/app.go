@@ -78,6 +78,8 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runUninstall(args[1:], stdin, stdout, stderr)
 	case "undo":
 		return runUndo(args[1:], stdin, stdout, stderr)
+	case "doctor":
+		return runDoctor(args[1:], stdout, stderr)
 	case "purge":
 		return runPurge(args[1:], stdin, stdout, stderr)
 	case "staged":
@@ -145,6 +147,12 @@ Usage:
   wtff staged [--purge <batch-id> | --purge --all]
       List batches currently held in the staging area. With --purge, delete
       a staged batch permanently instead of keeping it available for undo.
+
+  wtff doctor [--quiet]
+      Check wtff's own state and this machine's setup: what is held in
+      staging, the audit log, whether the built in rules load, and whether
+      Full Disk Access is granted. Exits non-zero if something needs a
+      decision, so it can be run from a script.
 
   wtff version
       Print the version.

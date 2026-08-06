@@ -32,6 +32,8 @@ var homeCommands = []command{
 		start: func(d *Deps, t Theme, _ string) liveBlock { return startPurgeFlow(d, t) }},
 	{name: "staged", description: "Restore or permanently delete items removed earlier",
 		start: func(d *Deps, t Theme, _ string) liveBlock { return startStagedFlow(d, t) }},
+	{name: "doctor", description: "Check wtff's own state and this machine's setup",
+		start: func(d *Deps, t Theme, _ string) liveBlock { return startDoctorFlow(d, t) }},
 	{name: "help", description: "Show this list"},
 	{name: "quit", description: "Exit wtff"},
 }

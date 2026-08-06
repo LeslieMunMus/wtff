@@ -86,6 +86,16 @@ func warningEntry(theme Theme, text string, details ...string) transcriptEntry {
 	}
 }
 
+// infoDetailEntry is an ordinary line whose specifics sit behind the
+// disclosure toggle, for output that is worth knowing and not worth several
+// lines of everyone's attention.
+func infoDetailEntry(theme Theme, text string, details ...string) transcriptEntry {
+	return transcriptEntry{
+		body:    "  " + lipgloss.NewStyle().Foreground(theme.Body).Render(text),
+		details: details,
+	}
+}
+
 func errorEntry(theme Theme, text string) transcriptEntry {
 	return transcriptEntry{body: "  " + lipgloss.NewStyle().Foreground(theme.Danger).Render("✗ "+text)}
 }
