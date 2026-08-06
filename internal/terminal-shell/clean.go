@@ -19,7 +19,8 @@ func startCleanFlow(deps *Deps, theme Theme) liveBlock {
 // underlying behavior, not two independent implementations of "what does
 // clean do."
 func cleanPlan(deps *Deps) (*deletionengine.Manifest, int, error) {
-	candidates, discoverySkips := cleancatalog.Discover(deps.Catalog.Entries(), deps.Home)
+	candidates, discoverySkips := cleancatalog.Discover(
+		cleancatalog.StageableEntries(deps.Catalog.Entries()), deps.Home)
 
 	skipped := 0
 	for _, s := range discoverySkips {

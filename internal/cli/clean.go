@@ -37,7 +37,8 @@ func runClean(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "wtff clean: cannot load the cleanup catalog:", err)
 		return 1
 	}
-	candidates, discoverySkips := cleancatalog.Discover(catalog.Entries(), home)
+	candidates, discoverySkips := cleancatalog.Discover(
+		cleancatalog.StageableEntries(catalog.Entries()), home)
 
 	rules, err := protectionrules.LoadBuiltin()
 	if err != nil {

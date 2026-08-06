@@ -76,17 +76,68 @@ func TestOnlyTrashIsPurgeableInTheShippedCatalog(t *testing.T) {
 		t.Fatalf("loading builtin catalog: %v", err)
 	}
 
+	// Both entries are the Trash: the one in the home directory, and the one
+	// macOS keeps separately on every other mounted volume. Nothing else
+	// qualifies, and adding to this set should require editing this line.
+	want := map[string]bool{"trash-contents": true, "volume-trash-contents": true}
+
 	purgeable := PurgeableEntries(catalog.Entries())
-	if len(purgeable) != 1 {
-		var names []string
-		for _, entry := range purgeable {
-			names = append(names, entry.ID)
+	got := map[string]bool{}
+	for _, entry := range purgeable {
+		got[entry.ID] = true
+	}
+	if len(purgeable) != len(want) {
+		t.Fatalf("purgeable set is %v, want %v", got, want)
+	}
+	for id := range want {
+		if !got[id] {
+			t.Fatalf("purgeable set is %v, want %v", got, want)
 		}
-		t.Fatalf("expected exactly one purgeable entry, got %d: %v", len(purgeable), names)
 	}
-	if purgeable[0].ID != "trash-contents" {
-		t.Fatalf("purgeable entry is %q, want trash-contents", purgeable[0].ID)
+}
+
+// Only entries staging genuinely cannot reach may be purge only, or a category
+// quietly stops being reversible.
+func TestOnlyCrossVolumeEntriesArePurgeOnly(t *testing.T) {
+	catalog, err := LoadBuiltin()
+	if err != nil {
+		t.Fatalf("loading builtin catalog: %v", err)
 	}
+	for _, entry := range catalog.Entries() {
+		if entry.PurgeOnly && entry.Kind != KindVolumeTrash {
+			t.Errorf("%s is purge only but is not on another volume, so clean "+
+				"could have staged it reversibly", entry.ID)
+		}
+	}
+}
+
+// The home Trash must stay available to clean, which stages it reversibly.
+// Only the cross volume entry is excluded.
+func TestStageableEntriesKeepsTheHomeTrash(t *testing.T) {
+	catalog, err := LoadBuiltin()
+	if err != nil {
+		t.Fatalf("loading builtin catalog: %v", err)
+	}
+
+	var ids []string
+	for _, entry := range StageableEntries(catalog.Entries()) {
+		ids = append(ids, entry.ID)
+	}
+	if !contains(ids, "trash-contents") {
+		t.Fatalf("clean should still stage the home trash, got %v", ids)
+	}
+	if contains(ids, "volume-trash-contents") {
+		t.Fatalf("clean cannot stage across volumes, got %v", ids)
+	}
+}
+
+func contains(haystack []string, needle string) bool {
+	for _, item := range haystack {
+		if item == needle {
+			return true
+		}
+	}
+	return false
 }
 
 // Caches are regenerable, which is not the same as disposable without a way

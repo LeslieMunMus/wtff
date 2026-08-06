@@ -1,0 +1,27 @@
+version: 1
+
+entries:
+  - id: volume-trash-contents
+    category: trash
+    kind: volume-trash
+    path: "/Volumes"
+    reason: >-
+      Items the user discarded while working on a volume other than the
+      startup disk. macOS does not move these to the home Trash; each volume
+      keeps its own, so they occupy space on that drive until it is emptied
+      and are invisible to anything that only looks at the home directory.
+    purgeable: true
+    purge_reason: >-
+      This is the same Trash the Finder shows, kept per volume because a file
+      discarded on an external drive cannot be moved to the startup disk
+      without copying it. Emptying it completes a decision the person already
+      made, exactly as emptying the home Trash does.
+    purge_only: true
+    provenance:
+      source: >-
+        Volume layout confirmed on macOS running Darwin 25.6, where /Volumes
+        held one entry, a symbolic link named Macintosh HD pointing at the
+        startup disk, which is why discovery compares filesystem device
+        identity rather than trusting the mount point name.
+      method: system-inspection
+      verified: "2026-08-06"

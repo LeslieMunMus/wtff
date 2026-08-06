@@ -60,6 +60,13 @@ func Discover(entries []Entry, home string) ([]deletionengine.Candidate, []Skip)
 			found, containerSkips := discoverContainer(entry, path)
 			candidates = append(candidates, found...)
 			skips = append(skips, containerSkips...)
+
+		case KindVolumeTrash:
+			// Ignores the expanded path: this kind's path names where mount
+			// points appear, and what it covers depends on what is attached.
+			found, volumeSkips := discoverVolumeTrash(entry)
+			candidates = append(candidates, found...)
+			skips = append(skips, volumeSkips...)
 		}
 	}
 

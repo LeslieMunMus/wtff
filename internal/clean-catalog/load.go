@@ -102,7 +102,7 @@ func validate(entry *Entry) error {
 			ErrInvalidEntry, entry.ID)
 	}
 	switch entry.Kind {
-	case KindContainer, KindOpaque:
+	case KindContainer, KindOpaque, KindVolumeTrash:
 	default:
 		return fmt.Errorf("%w: %s declares unknown kind %q", ErrInvalidEntry, entry.ID, entry.Kind)
 	}
@@ -130,6 +130,12 @@ func validate(entry *Entry) error {
 	if entry.Purgeable && len(strings.TrimSpace(entry.PurgeReason)) < 20 {
 		return fmt.Errorf("%w: %s is marked purgeable and must explain in purge_reason why "+
 			"permanent removal is appropriate", ErrInvalidEntry, entry.ID)
+	}
+	// A purge only entry that is not purgeable is reachable by no command at
+	// all, which is a typo rather than a configuration.
+	if entry.PurgeOnly && !entry.Purgeable {
+		return fmt.Errorf("%w: %s is marked purge_only but not purgeable, so nothing "+
+			"would ever act on it", ErrInvalidEntry, entry.ID)
 	}
 	if !entry.Purgeable && strings.TrimSpace(entry.PurgeReason) != "" {
 		return fmt.Errorf("%w: %s gives a purge_reason but is not marked purgeable",

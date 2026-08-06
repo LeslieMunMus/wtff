@@ -10,6 +10,12 @@ const (
 	// application under ~/Library/Caches.
 	KindContainer Kind = "container"
 
+	// KindVolumeTrash enumerates the current user's trash on every mounted
+	// volume other than the boot volume. Its path names the directory mount
+	// points appear under rather than a directory to remove, because what it
+	// expands to depends on what is plugged in at the time.
+	KindVolumeTrash Kind = "volume-trash"
+
 	// KindOpaque treats the entire path as one candidate and does not look
 	// inside it. Used where a directory's internal layout is not meaningful to
 	// a person reviewing what would be removed, such as a content addressed
@@ -61,6 +67,17 @@ type Entry struct {
 	// grow by someone flipping a boolean.
 	PurgeReason string `yaml:"purge_reason,omitempty"`
 
+	// PurgeOnly excludes an entry from "wtff clean", which stages.
+	//
+	// This exists for entries that live on another volume. Staging is a rename
+	// into wtff's staging area, and a rename cannot cross a filesystem
+	// boundary, so the deletion engine refuses those outright rather than
+	// falling back to a copy that would quietly lose extended attributes and
+	// make undo a lie. Offering such an entry under clean would mean every run
+	// on a machine with an external drive reports failures it was always going
+	// to report.
+	PurgeOnly bool `yaml:"purge_only,omitempty"`
+
 	Provenance Provenance `yaml:"provenance"`
 
 	// origin names the file this entry came from, for diagnostics.
@@ -80,6 +97,18 @@ func PurgeableEntries(entries []Entry) []Entry {
 		}
 	}
 	return purgeable
+}
+
+// StageableEntries returns the subset "wtff clean" may stage, which is
+// everything not sitting somewhere staging cannot reach.
+func StageableEntries(entries []Entry) []Entry {
+	var stageable []Entry
+	for _, entry := range entries {
+		if !entry.PurgeOnly {
+			stageable = append(stageable, entry)
+		}
+	}
+	return stageable
 }
 
 // entryDocument is the on disk shape of a catalog file.
