@@ -18,6 +18,7 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	quiet := fs.Bool("quiet", false, "print only what needs attention")
+	jsonOut := fs.Bool("json", false, "emit one JSON document instead of human readable output")
 	if err := fs.Parse(reorderFlagsFirst(args, commonBoolFlags)); err != nil {
 		return 2
 	}
@@ -33,6 +34,20 @@ func runDoctor(args []string, stdout, stderr io.Writer) int {
 	}
 
 	report := diagnostics.Run(opts)
+
+	if *jsonOut {
+		if err := emitJSON(stdout, jsonDocument{
+			Command: "doctor", Doctor: diagnosticToJSON(report),
+		}); err != nil {
+			fmt.Fprintln(stderr, "wtff doctor: cannot write JSON:", err)
+			return 1
+		}
+		if report.NeedsAttention() {
+			return 1
+		}
+		return 0
+	}
+
 	for _, finding := range report.Findings {
 		if *quiet && finding.Level != diagnostics.LevelWarn {
 			continue

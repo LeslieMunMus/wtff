@@ -15,6 +15,7 @@ func runStaged(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	purge := fs.Bool("purge", false, "permanently delete staged batches instead of listing them")
 	all := fs.Bool("all", false, "with --purge, delete every staged batch")
 	yes := fs.Bool("yes", false, "proceed without an interactive confirmation")
+	jsonOut := fs.Bool("json", false, "emit one JSON document instead of human readable output")
 	if err := fs.Parse(reorderFlagsFirst(args, commonBoolFlags)); err != nil {
 		return 2
 	}
@@ -37,7 +38,13 @@ func runStaged(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 
 	if *purge {
+		if refuseInteractiveJSON("staged", stderr, *jsonOut, false, *yes) {
+			return 2
+		}
 		return purgeStaged(staging, positional, *all, *yes, stdin, stdout, stderr)
+	}
+	if *jsonOut {
+		return listStagedJSON(staging, stdout, stderr)
 	}
 	return listStaged(staging, stdout, stderr)
 }
@@ -71,6 +78,44 @@ func listStaged(staging *deletionengine.StagingArea, stdout, stderr io.Writer) i
 		fmt.Fprintf(stdout, "%s  %-8s  %d item(s)  %s  from %s\n",
 			batch.BatchID, batch.Command, len(batch.Items), batchSize(batch),
 			batch.CreatedAt.Local().Format("2006-01-02 15:04"))
+	}
+	return 0
+}
+
+// listStagedJSON emits the staged batches as one document.
+func listStagedJSON(staging *deletionengine.StagingArea, stdout, stderr io.Writer) int {
+	batches, err := staging.ListBatches()
+	if err != nil {
+		fmt.Fprintln(stderr, "wtff staged: cannot list batches:", err)
+		return 1
+	}
+
+	// An empty array rather than null, so a consumer can iterate without a nil
+	// check and cannot mistake "none staged" for "field missing".
+	out := make([]jsonBatch, 0, len(batches))
+	for _, batch := range batches {
+		var bytes int64
+		complete := true
+		for _, item := range batch.Items {
+			if item.SizeKnown {
+				bytes += item.SizeBytes
+			} else {
+				complete = false
+			}
+		}
+		out = append(out, jsonBatch{
+			BatchID:      batch.BatchID,
+			Command:      batch.Command,
+			CreatedAt:    batch.CreatedAt,
+			ItemCount:    len(batch.Items),
+			Bytes:        bytes,
+			SizeComplete: complete,
+		})
+	}
+
+	if err := emitJSON(stdout, jsonDocument{Command: "staged", Staged: out}); err != nil {
+		fmt.Fprintln(stderr, "wtff staged: cannot write JSON:", err)
+		return 1
 	}
 	return 0
 }

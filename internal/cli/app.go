@@ -157,6 +157,11 @@ Usage:
   wtff version
       Print the version.
 
+Add --json to clean, purge, remove, uninstall, staged, or doctor to emit one
+JSON document instead of human readable output. It needs --dry-run or --yes,
+since it cannot stop to ask for confirmation without corrupting its own
+output, and every message that is not the document goes to stderr.
+
 Every command is safe by default: nothing is removed without either an
 interactive confirmation or --yes, and removal is reversible unless --purge
 is given explicitly.

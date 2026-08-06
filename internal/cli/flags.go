@@ -53,6 +53,8 @@ var commonBoolFlags = map[string]bool{
 	"purge":   true,
 	"all":     true,
 	"yes":     true,
+	"json":    true,
+	"quiet":   true,
 	"help":    true,
 	"h":       true,
 }

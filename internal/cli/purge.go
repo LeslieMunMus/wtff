@@ -24,7 +24,11 @@ func runPurge(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	dryRun := fs.Bool("dry-run", false, "show what would happen without changing anything")
 	yes := fs.Bool("yes", false, "proceed without an interactive confirmation")
+	jsonOut := fs.Bool("json", false, "emit one JSON document instead of human readable output")
 	if err := fs.Parse(reorderFlagsFirst(args, commonBoolFlags)); err != nil {
+		return 2
+	}
+	if refuseInteractiveJSON("purge", stderr, *jsonOut, *dryRun, *yes) {
 		return 2
 	}
 	if len(fs.Args()) > 0 {
@@ -106,14 +110,24 @@ func runPurge(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	printPlan(stdout, manifest, skips)
-
-	if len(manifest.Entries) == 0 {
+	if *dryRun || len(manifest.Entries) == 0 {
+		if *jsonOut {
+			if err := emitJSON(stdout, jsonDocument{
+				Command: "purge", Plan: planToJSON(manifest, skips, *dryRun),
+			}); err != nil {
+				fmt.Fprintln(stderr, "wtff purge: cannot write JSON:", err)
+				return 1
+			}
+			return 0
+		}
+		printPlan(stdout, manifest, skips)
+		if len(manifest.Entries) > 0 {
+			fmt.Fprintln(stdout, "\ndry run: nothing was changed")
+		}
 		return 0
 	}
-	if *dryRun {
-		fmt.Fprintln(stdout, "\ndry run: nothing was changed")
-		return 0
+	if !*jsonOut {
+		printPlan(stdout, manifest, skips)
 	}
 
 	if !approve(stdin, stdout, stderr, deletionengine.ActionPurge, *yes) {
@@ -130,7 +144,16 @@ func runPurge(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	printResult(stdout, deletionengine.ActionPurge, result)
+	if *jsonOut {
+		if err := emitJSON(stdout, jsonDocument{
+			Command: "purge", Result: resultToJSON(deletionengine.ActionPurge, result),
+		}); err != nil {
+			fmt.Fprintln(stderr, "wtff purge: cannot write JSON:", err)
+			return 1
+		}
+	} else {
+		printResult(stdout, deletionengine.ActionPurge, result)
+	}
 
 	if logErr := log.Err(); logErr != nil {
 		fmt.Fprintln(stderr, "wtff purge: warning, the operation log had a write failure:", logErr)

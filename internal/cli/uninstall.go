@@ -25,7 +25,11 @@ func runUninstall(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	dryRun := fs.Bool("dry-run", false, "show what would happen without changing anything")
 	purge := fs.Bool("purge", false, "remove permanently instead of staging for undo")
 	yes := fs.Bool("yes", false, "proceed without an interactive confirmation")
+	jsonOut := fs.Bool("json", false, "emit one JSON document instead of human readable output")
 	if err := fs.Parse(reorderFlagsFirst(args, commonBoolFlags)); err != nil {
+		return 2
+	}
+	if refuseInteractiveJSON("uninstall", stderr, *jsonOut, *dryRun, *yes) {
 		return 2
 	}
 	remaining := fs.Args()
@@ -72,7 +76,10 @@ func runUninstall(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	// Root level components are reported before the plan rather than after the
 	// removal. wtff runs unprivileged by design and cannot remove these, so the
 	// honest thing is to say what will survive while the choice is still open.
-	if leftovers := uninstallcore.InspectSystemIntegration(app, apps); leftovers.Orphans() {
+	// Suppressed under --json, where it would be prose in the middle of a
+	// document. The same information is not yet in the JSON surface, which is
+	// recorded as a known gap rather than papered over by printing it anyway.
+	if leftovers := uninstallcore.InspectSystemIntegration(app, apps); leftovers.Orphans() && !*jsonOut {
 		fmt.Fprintf(stdout, "note: removing %s leaves privileged components behind, "+
 			"which wtff cannot remove because it does not run with elevated privileges:\n",
 			app.DisplayName)
@@ -132,8 +139,21 @@ func runUninstall(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		return 1
 	}
 
-	fmt.Fprintf(stdout, "uninstalling %s (%s)\n\n", app.DisplayName, app.BundleID)
-	printPlan(stdout, manifest, skips)
+	if !*jsonOut {
+		fmt.Fprintf(stdout, "uninstalling %s (%s)\n\n", app.DisplayName, app.BundleID)
+	}
+	if *jsonOut && *dryRun {
+		if err := emitJSON(stdout, jsonDocument{
+			Command: "uninstall", Plan: planToJSON(manifest, skips, true),
+		}); err != nil {
+			fmt.Fprintln(stderr, "wtff uninstall: cannot write JSON:", err)
+			return 1
+		}
+		return 0
+	}
+	if !*jsonOut {
+		printPlan(stdout, manifest, skips)
+	}
 
 	if len(manifest.Entries) == 0 {
 		return 0
@@ -172,7 +192,16 @@ func runUninstall(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 		return 1
 	}
 
-	printResult(stdout, action, result)
+	if *jsonOut {
+		if err := emitJSON(stdout, jsonDocument{
+			Command: "uninstall", Result: resultToJSON(action, result),
+		}); err != nil {
+			fmt.Fprintln(stderr, "wtff uninstall: cannot write JSON:", err)
+			return 1
+		}
+	} else {
+		printResult(stdout, action, result)
+	}
 
 	if logErr := log.Err(); logErr != nil {
 		fmt.Fprintln(stderr, "wtff uninstall: warning, the operation log had a write failure:", logErr)
