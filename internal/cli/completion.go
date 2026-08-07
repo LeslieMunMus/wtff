@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
-	uninstallcore "github.com/lesliemusengi/wtff/internal/uninstall-core"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
+	uninstallcore "github.com/lesliemunmus/wtff/internal/uninstall-core"
 )
 
 // runCompletion prints a completion script for the named shell.

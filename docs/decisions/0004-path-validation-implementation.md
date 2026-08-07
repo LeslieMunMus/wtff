@@ -69,7 +69,7 @@ under sustained real use.
   cannot silently disable the other.
 - No privileged ancestor immutability check yet. It is specified in the deletion engine design
   and belongs with the code that performs privileged operations.
-- The module path `github.com/lesliemusengi/wtff` is an assumption about eventual hosting. It
+- The module path `github.com/lesliemunmus/wtff` is an assumption about eventual hosting. It
   was necessary to compile. Changing it later means rewriting import lines across the tree, so
   it is worth confirming before the tree grows.
 

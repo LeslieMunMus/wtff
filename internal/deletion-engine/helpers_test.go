@@ -3,7 +3,7 @@ package deletionengine
 import (
 	"testing"
 
-	pathvalidation "github.com/lesliemusengi/wtff/internal/path-validation"
+	pathvalidation "github.com/lesliemunmus/wtff/internal/path-validation"
 )
 
 // resolveForTest reports the path the engine will see for a target, which under

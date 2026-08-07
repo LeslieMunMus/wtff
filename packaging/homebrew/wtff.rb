@@ -9,17 +9,17 @@
 # question honestly: nothing arrives already built, so nothing is quarantined.
 #
 # Publishing: copy this file to Formula/wtff.rb in a repository named
-# homebrew-wtff, then "brew install lesliemusengi/wtff/wtff". Update url and
+# homebrew-wtff, then "brew install lesliemunmus/wtff/wtff". Update url and
 # sha256 on every release; "make dist" prints the checksum of its archive, and
 # the source tarball's checksum comes from
 # "curl -sL <url> | shasum -a 256".
 class Wtff < Formula
   desc "Terminal-first macOS maintenance toolkit"
-  homepage "https://github.com/lesliemusengi/wtff"
-  url "https://github.com/lesliemusengi/wtff/archive/refs/tags/v0.1.0.tar.gz"
+  homepage "https://github.com/lesliemunmus/wtff"
+  url "https://github.com/lesliemunmus/wtff/archive/refs/tags/v0.1.0.tar.gz"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "MIT"
-  head "https://github.com/lesliemusengi/wtff.git", branch: "main"
+  head "https://github.com/lesliemunmus/wtff.git", branch: "main"
 
   depends_on "go" => :build
   depends_on :macos
@@ -27,7 +27,7 @@ class Wtff < Formula
   def install
     ldflags = %W[
       -s -w
-      -X github.com/lesliemusengi/wtff/internal/cli.Version=#{version}
+      -X github.com/lesliemunmus/wtff/internal/cli.Version=#{version}
     ]
     system "go", "build", *std_go_args(ldflags: ldflags), "./cmd/wtff"
   end

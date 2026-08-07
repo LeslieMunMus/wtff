@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
+	operationlog "github.com/lesliemunmus/wtff/internal/operation-log"
 )
 
 // blockList is a policy checker that protects an explicit set of paths.

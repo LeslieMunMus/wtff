@@ -6,7 +6,7 @@ package main
 import (
 	"os"
 
-	"github.com/lesliemusengi/wtff/internal/cli"
+	"github.com/lesliemunmus/wtff/internal/cli"
 )
 
 func main() {

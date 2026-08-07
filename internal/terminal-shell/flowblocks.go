@@ -7,7 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
 )
 
 // liveBlock is the one interactive component pinned above the prompt while

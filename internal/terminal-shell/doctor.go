@@ -5,7 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/lesliemusengi/wtff/internal/diagnostics"
+	"github.com/lesliemunmus/wtff/internal/diagnostics"
 )
 
 // startDoctorFlow reports wtff's own state into the transcript.

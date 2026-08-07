@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
-	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
+	operationlog "github.com/lesliemunmus/wtff/internal/operation-log"
 )
 
 // candidateRuleID and candidateReason are recorded against every path the user

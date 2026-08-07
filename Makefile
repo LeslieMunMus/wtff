@@ -5,7 +5,7 @@ CMD    := ./cmd/wtff
 # A working tree with uncommitted changes is marked, because a binary that
 # reports a clean tag it does not actually match is worse than no version.
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-LDFLAGS := -X github.com/lesliemusengi/wtff/internal/cli.Version=$(VERSION)
+LDFLAGS := -X github.com/lesliemunmus/wtff/internal/cli.Version=$(VERSION)
 
 .DEFAULT_GOAL := help
 

@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
-	pathvalidation "github.com/lesliemusengi/wtff/internal/path-validation"
+	operationlog "github.com/lesliemunmus/wtff/internal/operation-log"
+	pathvalidation "github.com/lesliemunmus/wtff/internal/path-validation"
 	"golang.org/x/sys/unix"
 )
 

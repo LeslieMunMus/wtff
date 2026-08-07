@@ -1,8 +1,8 @@
 package terminalshell
 
 import (
-	cleancatalog "github.com/lesliemusengi/wtff/internal/clean-catalog"
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
+	cleancatalog "github.com/lesliemunmus/wtff/internal/clean-catalog"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
 )
 
 // startCleanFlow returns the first live block of the clean flow: a scan,

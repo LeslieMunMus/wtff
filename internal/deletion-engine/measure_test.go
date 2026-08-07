@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
+	operationlog "github.com/lesliemunmus/wtff/internal/operation-log"
 )
 
 // A measurement that finishes in time reports its real answer.

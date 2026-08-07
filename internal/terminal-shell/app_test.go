@@ -9,9 +9,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	cleancatalog "github.com/lesliemusengi/wtff/internal/clean-catalog"
-	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
-	protectionrules "github.com/lesliemusengi/wtff/internal/protection-rules"
+	cleancatalog "github.com/lesliemunmus/wtff/internal/clean-catalog"
+	operationlog "github.com/lesliemunmus/wtff/internal/operation-log"
+	protectionrules "github.com/lesliemunmus/wtff/internal/protection-rules"
 )
 
 // testDeps builds a Deps rooted at an isolated home directory.

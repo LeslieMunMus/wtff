@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
+	operationlog "github.com/lesliemunmus/wtff/internal/operation-log"
 )
 
 // stageOne stages a single file and returns the staging area and its batch.

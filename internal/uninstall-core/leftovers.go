@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
 )
 
 // leftoverTemplate describes one location macOS conventionally uses for

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
+	operationlog "github.com/lesliemunmus/wtff/internal/operation-log"
 	"golang.org/x/sys/unix"
 )
 

@@ -5,8 +5,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	cleancatalog "github.com/lesliemusengi/wtff/internal/clean-catalog"
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
+	cleancatalog "github.com/lesliemunmus/wtff/internal/clean-catalog"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
 )
 
 // startPurgeFlow begins the shallow purge: the catalog entries whose contents

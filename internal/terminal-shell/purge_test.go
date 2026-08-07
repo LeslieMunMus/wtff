@@ -8,7 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
 )
 
 // homeWithTrash builds an isolated home holding one discarded file.

@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
-	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
-	pathvalidation "github.com/lesliemusengi/wtff/internal/path-validation"
+	operationlog "github.com/lesliemunmus/wtff/internal/operation-log"
+	pathvalidation "github.com/lesliemunmus/wtff/internal/path-validation"
 )
 
 // maxSizeWalkEntries bounds how many entries a directory measurement visits.

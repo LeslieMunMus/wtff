@@ -1,4 +1,4 @@
-module github.com/lesliemusengi/wtff
+module github.com/lesliemunmus/wtff
 
 go 1.26.5
 

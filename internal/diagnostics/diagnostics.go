@@ -15,11 +15,11 @@ import (
 	"strings"
 	"time"
 
-	cleancatalog "github.com/lesliemusengi/wtff/internal/clean-catalog"
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
-	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
-	protectionrules "github.com/lesliemusengi/wtff/internal/protection-rules"
-	userconfig "github.com/lesliemusengi/wtff/internal/user-config"
+	cleancatalog "github.com/lesliemunmus/wtff/internal/clean-catalog"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
+	operationlog "github.com/lesliemunmus/wtff/internal/operation-log"
+	protectionrules "github.com/lesliemunmus/wtff/internal/protection-rules"
+	userconfig "github.com/lesliemunmus/wtff/internal/user-config"
 )
 
 // Level is how much a finding wants from the reader.

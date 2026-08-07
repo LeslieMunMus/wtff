@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
-	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
+	operationlog "github.com/lesliemunmus/wtff/internal/operation-log"
 )
 
 func runStaged(args []string, stdin io.Reader, stdout, stderr io.Writer) int {

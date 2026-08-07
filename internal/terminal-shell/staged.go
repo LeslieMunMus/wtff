@@ -5,7 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
 )
 
 // startStagedFlow begins the staged flow: list what is held, pick a batch,

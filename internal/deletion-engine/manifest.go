@@ -10,7 +10,7 @@ import (
 	"io"
 	"time"
 
-	pathvalidation "github.com/lesliemusengi/wtff/internal/path-validation"
+	pathvalidation "github.com/lesliemunmus/wtff/internal/path-validation"
 )
 
 // manifestVersion is the schema version of a serialized manifest. A manifest

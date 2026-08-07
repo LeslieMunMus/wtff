@@ -6,8 +6,8 @@ import (
 	"io"
 	"time"
 
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
-	"github.com/lesliemusengi/wtff/internal/diagnostics"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
+	"github.com/lesliemunmus/wtff/internal/diagnostics"
 )
 
 // The JSON surface is a stable contract, so it is defined here as its own

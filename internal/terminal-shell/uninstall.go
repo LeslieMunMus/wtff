@@ -6,8 +6,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
-	uninstallcore "github.com/lesliemusengi/wtff/internal/uninstall-core"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
+	uninstallcore "github.com/lesliemunmus/wtff/internal/uninstall-core"
 )
 
 // startUninstallFlow begins the uninstall flow. With a query already typed,

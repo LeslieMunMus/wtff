@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
-	protectionrules "github.com/lesliemusengi/wtff/internal/protection-rules"
+	operationlog "github.com/lesliemunmus/wtff/internal/operation-log"
+	protectionrules "github.com/lesliemunmus/wtff/internal/protection-rules"
 )
 
 // The engine is written against an interface so it can be tested without a real

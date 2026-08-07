@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"syscall"
 
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
 )
 
 // Overridable so tests can point discovery at a fixture tree. The real

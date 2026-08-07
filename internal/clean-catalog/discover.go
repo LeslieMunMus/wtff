@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
 )
 
 // Skip records an entry or a container child that discovery did not turn

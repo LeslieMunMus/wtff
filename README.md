@@ -14,7 +14,7 @@ tested.
 With Homebrew, once the tap exists:
 
 ```bash
-brew install lesliemusengi/wtff/wtff
+brew install lesliemunmus/wtff/wtff
 ```
 
 The tap builds from source on your machine. That is deliberate rather than

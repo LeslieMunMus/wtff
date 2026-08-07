@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
-	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
-	protectionrules "github.com/lesliemusengi/wtff/internal/protection-rules"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
+	operationlog "github.com/lesliemunmus/wtff/internal/operation-log"
+	protectionrules "github.com/lesliemunmus/wtff/internal/protection-rules"
 )
 
 // This is the same guarantee the deletion engine's own integration test

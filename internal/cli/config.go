@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"io"
 
-	cleancatalog "github.com/lesliemusengi/wtff/internal/clean-catalog"
-	protectionrules "github.com/lesliemusengi/wtff/internal/protection-rules"
-	userconfig "github.com/lesliemusengi/wtff/internal/user-config"
+	cleancatalog "github.com/lesliemunmus/wtff/internal/clean-catalog"
+	protectionrules "github.com/lesliemunmus/wtff/internal/protection-rules"
+	userconfig "github.com/lesliemunmus/wtff/internal/user-config"
 )
 
 // loadRules loads the protection rules a command should use, merging the

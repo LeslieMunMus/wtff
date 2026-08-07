@@ -6,9 +6,9 @@ import (
 	"io"
 	"os"
 
-	cleancatalog "github.com/lesliemusengi/wtff/internal/clean-catalog"
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
-	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
+	cleancatalog "github.com/lesliemunmus/wtff/internal/clean-catalog"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
+	operationlog "github.com/lesliemunmus/wtff/internal/operation-log"
 )
 
 func runClean(args []string, stdin io.Reader, stdout, stderr io.Writer) int {

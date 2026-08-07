@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	terminalshell "github.com/lesliemusengi/wtff/internal/terminal-shell"
+	terminalshell "github.com/lesliemunmus/wtff/internal/terminal-shell"
 )
 
 // detectDarkBackground asks the terminal whether it has a dark background.

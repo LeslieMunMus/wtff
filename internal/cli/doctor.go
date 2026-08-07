@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/lesliemusengi/wtff/internal/diagnostics"
+	"github.com/lesliemunmus/wtff/internal/diagnostics"
 )
 
 // runDoctor inspects wtff's own state and the environment it runs in.

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	cleancatalog "github.com/lesliemusengi/wtff/internal/clean-catalog"
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
-	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
-	protectionrules "github.com/lesliemusengi/wtff/internal/protection-rules"
+	cleancatalog "github.com/lesliemunmus/wtff/internal/clean-catalog"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
+	operationlog "github.com/lesliemunmus/wtff/internal/operation-log"
+	protectionrules "github.com/lesliemunmus/wtff/internal/protection-rules"
 )
 
 // Deps bundles what every screen needs to reach the rest of wtff.

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
-	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
+	operationlog "github.com/lesliemunmus/wtff/internal/operation-log"
 )
 
 // fixture builds an isolated home with the paths wtff uses, so no check here

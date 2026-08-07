@@ -13,8 +13,8 @@ import (
 	"os"
 	"path/filepath"
 
-	cleancatalog "github.com/lesliemusengi/wtff/internal/clean-catalog"
-	protectionrules "github.com/lesliemusengi/wtff/internal/protection-rules"
+	cleancatalog "github.com/lesliemunmus/wtff/internal/clean-catalog"
+	protectionrules "github.com/lesliemunmus/wtff/internal/protection-rules"
 )
 
 // Layout is where configuration is read from.

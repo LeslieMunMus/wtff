@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
-	pathvalidation "github.com/lesliemusengi/wtff/internal/path-validation"
+	pathvalidation "github.com/lesliemunmus/wtff/internal/path-validation"
 	"golang.org/x/sys/unix"
 )
 

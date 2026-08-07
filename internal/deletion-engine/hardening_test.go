@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
+	operationlog "github.com/lesliemunmus/wtff/internal/operation-log"
 )
 
 // These cases come from a review pass over the engine rather than from the

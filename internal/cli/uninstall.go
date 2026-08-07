@@ -7,9 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
-	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
-	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
-	uninstallcore "github.com/lesliemusengi/wtff/internal/uninstall-core"
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
+	operationlog "github.com/lesliemunmus/wtff/internal/operation-log"
+	uninstallcore "github.com/lesliemunmus/wtff/internal/uninstall-core"
 )
 
 // appSearchRoots returns the directories wtff looks for installed
