@@ -82,10 +82,17 @@ type Entry struct {
 
 	// origin names the file this entry came from, for diagnostics.
 	origin string
+
+	// userSupplied marks an entry that came from the user's own configuration
+	// rather than the catalog compiled into the binary.
+	userSupplied bool
 }
 
 // Origin reports which catalog file defined this entry.
 func (e Entry) Origin() string { return e.origin }
+
+// UserSupplied reports whether this entry came from the user's configuration.
+func (e Entry) UserSupplied() bool { return e.userSupplied }
 
 // PurgeableEntries returns the subset that "wtff purge" may remove
 // permanently. Everything else belongs to "wtff clean", which stages first.

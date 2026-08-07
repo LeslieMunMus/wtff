@@ -19,6 +19,7 @@ import (
 	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
 	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
 	protectionrules "github.com/lesliemusengi/wtff/internal/protection-rules"
+	userconfig "github.com/lesliemusengi/wtff/internal/user-config"
 )
 
 // Level is how much a finding wants from the reader.
@@ -92,6 +93,9 @@ type Options struct {
 	StagingRoot string
 	LogPath     string
 
+	// ConfigRoot is where the user's own rules and catalog entries live.
+	ConfigRoot string
+
 	// Now is injected so the age based findings are testable.
 	Now time.Time
 }
@@ -108,6 +112,7 @@ func Run(opts Options) Report {
 	report.add(checkRules(opts)...)
 	report.add(checkCatalog(opts)...)
 	report.add(checkVisibility(opts)...)
+	report.add(checkUserConfig(opts)...)
 	return report
 }
 
@@ -293,6 +298,56 @@ func checkLog(opts Options) []Finding {
 	})
 }
 
+// checkUserConfig reports what the person's own configuration adds, and
+// anything it overrides.
+//
+// Doctor reported only the built in counts until this existed, which meant the
+// one command whose job is saying what state wtff is in was quietly ignoring
+// the files most likely to have changed that state.
+func checkUserConfig(opts Options) []Finding {
+	layout := userconfig.LayoutAt(opts.ConfigRoot)
+	if !layout.Exists() {
+		return []Finding{{
+			Area: "configuration", Level: LevelOK,
+			Summary: "none, so the built in rules and catalog are in effect unchanged",
+			Detail:  []string{"create " + layout.Root + " to add your own"},
+		}}
+	}
+
+	rules, err := userconfig.LoadRules(opts.Home, layout)
+	if err != nil {
+		return []Finding{{
+			Area: "configuration", Level: LevelWarn,
+			Summary: "your configuration does not load, so every command refuses to run",
+			Detail:  []string{err.Error()},
+		}}
+	}
+
+	findings := []Finding{{
+		Area: "configuration", Level: LevelOK,
+		Summary: "loaded from " + layout.Root,
+	}}
+
+	if overrides := rules.Overrides(); len(overrides) > 0 {
+		detail := make([]string, 0, len(overrides)+1)
+		for _, override := range overrides {
+			detail = append(detail, fmt.Sprintf("%s is allowed by %s (%s), overriding %s",
+				override.Path, override.UserRuleID, override.UserRuleFile,
+				override.BuiltinRuleID))
+		}
+		detail = append(detail,
+			"this is allowed and deliberate, and worth seeing written down somewhere "+
+				"other than the file that did it")
+		findings = append(findings, Finding{
+			Area: "configuration", Level: LevelNote,
+			Summary: fmt.Sprintf("%d built in protection%s overridden by your rules",
+				len(overrides), plural(len(overrides), "", "s")),
+			Detail: detail,
+		})
+	}
+	return findings
+}
+
 func checkRules(opts Options) []Finding {
 	rules, err := protectionrules.LoadBuiltin()
 	if err != nil {
@@ -449,7 +504,12 @@ func DefaultOptions() (Options, error) {
 	if err != nil {
 		return Options{}, err
 	}
-	return Options{Home: home, StagingRoot: stagingRoot, LogPath: logPath}, nil
+	layout, err := userconfig.DefaultLayout()
+	if err != nil {
+		return Options{}, err
+	}
+	return Options{Home: home, StagingRoot: stagingRoot, LogPath: logPath,
+		ConfigRoot: layout.Root}, nil
 }
 
 func permissionsOf(path string) string {

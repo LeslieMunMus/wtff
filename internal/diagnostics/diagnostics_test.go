@@ -20,6 +20,7 @@ func fixture(t *testing.T) Options {
 		Home:        home,
 		StagingRoot: filepath.Join(home, "Library", "Application Support", "wtff", "staging"),
 		LogPath:     filepath.Join(home, "Library", "Logs", "wtff", "operations.log"),
+		ConfigRoot:  filepath.Join(home, ".config", "wtff"),
 		Now:         time.Now(),
 	}
 }
@@ -420,4 +421,122 @@ func snapshot(t *testing.T, root string) map[string]bool {
 		t.Fatalf("walking: %v", err)
 	}
 	return seen
+}
+
+func writeUserRule(t *testing.T, opts Options, body string) {
+	t.Helper()
+	dir := filepath.Join(opts.ConfigRoot, "rules")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "mine.yaml"),
+		[]byte("version: 1\nrules:\n"+body), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+}
+
+func TestNoConfigurationIsReportedAsSuch(t *testing.T) {
+	finding := find(t, Run(fixture(t)), "configuration")
+	if finding.Level != LevelOK || !strings.Contains(finding.Summary, "none") {
+		t.Fatalf("expected an explicit none, got %s: %s", finding.Level, finding.Summary)
+	}
+	if !strings.Contains(strings.Join(finding.Detail, "\n"), opts_root_hint) {
+		t.Errorf("the detail should say where to create one, got %v", finding.Detail)
+	}
+}
+
+const opts_root_hint = ".config/wtff"
+
+// The one command whose job is saying what state wtff is in must not ignore
+// the files most likely to have changed that state.
+func TestConfigurationIsReportedWhenPresent(t *testing.T) {
+	opts := fixture(t)
+	writeUserRule(t, opts, `
+  - id: my-workshop
+    match:
+      type: prefix
+      path: "~/workshop-notes"
+    effect: protect
+    severity: standard
+    category: personal
+    reason: "Years of work that no cleanup tool has any business touching."
+    provenance:
+      source: "The person who owns this machine said so."
+      method: system-inspection
+      verified: "2026-08-06"
+`)
+
+	finding := find(t, Run(opts), "configuration")
+	if finding.Level != LevelOK || !strings.Contains(finding.Summary, "loaded from") {
+		t.Fatalf("a present configuration should be reported, got %s: %s",
+			finding.Level, finding.Summary)
+	}
+}
+
+// An override is allowed and deliberate, and worth seeing written down
+// somewhere other than the file that did it.
+func TestOverridesAreSurfacedByDoctor(t *testing.T) {
+	opts := fixture(t)
+	writeUserRule(t, opts, `
+  - id: allow-cloudkit-data
+    match:
+      type: prefix
+      path: "~/Library/Caches/CloudKit/data"
+    effect: allow
+    severity: standard
+    category: local
+    reason: "I understand what this holds and want wtff to clean it here."
+    provenance:
+      source: "The person who owns this machine said so."
+      method: system-inspection
+      verified: "2026-08-06"
+`)
+
+	var surfaced bool
+	for _, finding := range findAll(Run(opts), "configuration") {
+		if strings.Contains(finding.Summary, "overridden") {
+			surfaced = true
+			if finding.Level != LevelNote {
+				t.Error("a deliberate override is worth knowing, not a problem to fix")
+			}
+			detail := strings.Join(finding.Detail, "\n")
+			if !strings.Contains(detail, "cloudkit-sync-state") {
+				t.Errorf("the detail should name the built in rule, got %q", detail)
+			}
+			if !strings.Contains(detail, "mine.yaml") {
+				t.Errorf("the detail should name the file, got %q", detail)
+			}
+		}
+	}
+	if !surfaced {
+		t.Fatal("an override was not surfaced")
+	}
+}
+
+// A configuration that does not load stops every command, so doctor is the
+// place a person finds out why.
+func TestBrokenConfigurationIsAWarning(t *testing.T) {
+	opts := fixture(t)
+	writeUserRule(t, opts, `
+  - id: no-provenance
+    match:
+      type: prefix
+      path: "~/somewhere"
+    effect: protect
+    severity: standard
+    category: local
+    reason: "This rule has no provenance and will not load."
+`)
+
+	report := Run(opts)
+	finding := find(t, report, "configuration")
+	if finding.Level != LevelWarn {
+		t.Fatalf("a configuration that does not load should warn, got %s", finding.Level)
+	}
+	if !strings.Contains(finding.Summary, "refuses to run") {
+		t.Fatalf("the summary should say what the consequence is, got %q", finding.Summary)
+	}
+	if !report.NeedsAttention() {
+		t.Fatal("a broken configuration should need attention")
+	}
 }

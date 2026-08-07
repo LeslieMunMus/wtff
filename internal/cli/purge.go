@@ -9,7 +9,6 @@ import (
 	cleancatalog "github.com/lesliemusengi/wtff/internal/clean-catalog"
 	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
 	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
-	protectionrules "github.com/lesliemusengi/wtff/internal/protection-rules"
 )
 
 // runPurge removes the catalog entries marked purgeable, permanently.
@@ -42,9 +41,8 @@ func runPurge(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	catalog, err := cleancatalog.LoadBuiltin()
-	if err != nil {
-		fmt.Fprintln(stderr, "wtff purge: cannot load the cleanup catalog:", err)
+	catalog, ok := loadCatalog("purge", stderr)
+	if !ok {
 		return 1
 	}
 	entries := cleancatalog.PurgeableEntries(catalog.Entries())
@@ -66,10 +64,12 @@ func runPurge(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		discoverySkips = append(discoverySkips, entrySkips...)
 	}
 
-	rules, err := protectionrules.LoadBuiltin()
-	if err != nil {
-		fmt.Fprintln(stderr, "wtff purge: cannot load protection rules:", err)
+	rules, ok := loadRules("purge", stdout, stderr)
+	if !ok {
 		return 1
+	}
+	if !*jsonOut {
+		reportOverrides(rules, stdout)
 	}
 
 	logPath, err := operationlog.DefaultPath()

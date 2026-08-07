@@ -9,7 +9,6 @@ import (
 
 	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
 	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
-	protectionrules "github.com/lesliemusengi/wtff/internal/protection-rules"
 	uninstallcore "github.com/lesliemusengi/wtff/internal/uninstall-core"
 )
 
@@ -100,10 +99,12 @@ func runUninstall(args []string, stdin io.Reader, stdout, stderr io.Writer) int 
 	}}
 	candidates = append(candidates, uninstallcore.DiscoverLeftovers(app, home)...)
 
-	rules, err := protectionrules.LoadBuiltin()
-	if err != nil {
-		fmt.Fprintln(stderr, "wtff uninstall: cannot load protection rules:", err)
+	rules, ok := loadRules("uninstall", stdout, stderr)
+	if !ok {
 		return 1
+	}
+	if !*jsonOut {
+		reportOverrides(rules, stdout)
 	}
 
 	logPath, err := operationlog.DefaultPath()

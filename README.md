@@ -106,6 +106,32 @@ provenance. wtff is built around three commitments instead:
 
 See `docs/architecture/naming-conventions.md`.
 
+## Configuration
+
+Optional, and most machines will never need it. wtff reads `~/.config/wtff`,
+honouring `XDG_CONFIG_HOME` when set.
+
+```
+~/.config/wtff/rules/*.yaml      your own protection rules
+~/.config/wtff/catalog/*.yaml    your own cleanup categories
+```
+
+Both use the same schema as the built in files, provenance included, and both
+are additive: your entries join the built in ones rather than replacing them.
+
+A rule may carve an exception out of a built in protection when it is more
+specific, which is how you overrule a judgement call wtff made on your behalf.
+Two limits on that. Rules marked critical, which is credentials, keychains, and
+irreplaceable personal data, can never be carved: an attempt is refused when
+the configuration loads rather than ignored later, so you find out rather than
+assume it worked. And every override is announced before anything is planned,
+and again by `wtff doctor`, because the value of a protection list is that it
+can be trusted without being read.
+
+A catalog entry you add cannot mark itself purgeable. `clean` will stage it,
+reversibly. Permanent removal stays with entries whose justification is argued
+in this repository where anyone can read it.
+
 ## Shell completion
 
 ```bash

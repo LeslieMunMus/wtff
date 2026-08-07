@@ -101,6 +101,16 @@ type Rule struct {
 	Reason     string     `yaml:"reason"`
 	Provenance Provenance `yaml:"provenance"`
 
+	// userSupplied marks a rule that came from the user's own configuration
+	// rather than from the set compiled into the binary.
+	//
+	// It exists so an override can be reported rather than merely allowed. A
+	// person editing their own rules is entitled to carve an exception out of
+	// a standard protection, and is not entitled to have wtff stay quiet about
+	// it: the whole value of a protection list is that someone can trust it
+	// without reading it, and an unannounced local override spends that trust.
+	userSupplied bool
+
 	// patterns holds every expanded, absolute form of Match.Path.
 	//
 	// There is more than one because a home directory reached through a link

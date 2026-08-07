@@ -9,7 +9,6 @@ import (
 	cleancatalog "github.com/lesliemusengi/wtff/internal/clean-catalog"
 	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
 	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
-	protectionrules "github.com/lesliemusengi/wtff/internal/protection-rules"
 )
 
 func runClean(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -36,18 +35,19 @@ func runClean(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	catalog, err := cleancatalog.LoadBuiltin()
-	if err != nil {
-		fmt.Fprintln(stderr, "wtff clean: cannot load the cleanup catalog:", err)
+	catalog, ok := loadCatalog("clean", stderr)
+	if !ok {
 		return 1
 	}
 	candidates, discoverySkips := cleancatalog.Discover(
 		cleancatalog.StageableEntries(catalog.Entries()), home)
 
-	rules, err := protectionrules.LoadBuiltin()
-	if err != nil {
-		fmt.Fprintln(stderr, "wtff clean: cannot load protection rules:", err)
+	rules, ok := loadRules("clean", stdout, stderr)
+	if !ok {
 		return 1
+	}
+	if !*jsonOut {
+		reportOverrides(rules, stdout)
 	}
 
 	logPath, err := operationlog.DefaultPath()

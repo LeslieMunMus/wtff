@@ -10,7 +10,6 @@ import (
 
 	deletionengine "github.com/lesliemusengi/wtff/internal/deletion-engine"
 	operationlog "github.com/lesliemusengi/wtff/internal/operation-log"
-	protectionrules "github.com/lesliemusengi/wtff/internal/protection-rules"
 )
 
 // candidateRuleID and candidateReason are recorded against every path the user
@@ -52,10 +51,12 @@ func runRemove(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	rules, err := protectionrules.LoadBuiltin()
-	if err != nil {
-		fmt.Fprintln(stderr, "wtff remove: cannot load protection rules:", err)
+	rules, ok := loadRules("remove", stdout, stderr)
+	if !ok {
 		return 1
+	}
+	if !*jsonOut {
+		reportOverrides(rules, stdout)
 	}
 
 	logPath, err := operationlog.DefaultPath()
