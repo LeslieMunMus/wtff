@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	deletionengine "github.com/lesliemunmus/wtff/internal/deletion-engine"
 )
 
 // trashHome builds an isolated home with a Trash holding one file, so no test
@@ -263,5 +265,50 @@ func TestStagedPurgeFlagsWorkAfterPositionalArguments(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("a flag after a positional argument was not honored, exit %d: %s",
 			code, errOut.String())
+	}
+}
+
+// A person told only "N item(s) could not be deleted" has no way to act on
+// it: permission denied and a busy file call for different responses, and the
+// count alone does not say which happened. This forces a real failure by
+// making the batch's items directory unwritable, so unlinking anything inside
+// it is refused by the kernel, and requires the actual OS reason to reach
+// stdout rather than being aggregated away.
+func TestStagedPurgeReportsWhyAnItemFailed(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root, which bypasses the permission this test relies on")
+	}
+	batchID := stageSomething(t)
+
+	root, err := deletionengine.DefaultStagingRoot()
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	itemsDir := filepath.Join(root, batchID, "items")
+	if err := os.Chmod(itemsDir, 0o500); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(itemsDir, 0o700) })
+
+	var out, errOut bytes.Buffer
+	code := Run([]string{"staged", "--purge", batchID, "--yes"},
+		strings.NewReader(""), &out, &errOut)
+	if code == 0 {
+		t.Fatal("a purge that could not remove anything should not exit 0")
+	}
+
+	report := out.String()
+	if !strings.Contains(report, "could not be deleted") {
+		t.Fatalf("expected the failure summary, got:\n%s", report)
+	}
+	if strings.Contains(report, "unknown reason") {
+		t.Fatalf("the real OS error was not captured, got:\n%s", report)
+	}
+	// The actual errno text, not just a path and a generic count. This is
+	// the property the fix exists for: before it, this whole line was
+	// simply absent, replaced by an aggregate count with no explanation.
+	if !strings.Contains(strings.ToLower(report), "permission denied") &&
+		!strings.Contains(strings.ToLower(report), "operation not permitted") {
+		t.Fatalf("expected a permission related OS error, got:\n%s", report)
 	}
 }

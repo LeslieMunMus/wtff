@@ -212,6 +212,11 @@ func purgeStaged(staging *deletionengine.StagingArea, ids []string, all, yes boo
 	var purged, failed int
 	var bytes int64
 	var partial bool
+	// Failed outcomes are collected across every batch rather than printed
+	// inline, so the summary line comes first and the per item reasons follow
+	// it, matching how every other command in this project reports a mixed
+	// result: the headline before the detail, not interleaved with it.
+	var failures []deletionengine.PurgeOutcome
 	exit := 0
 	for _, batch := range targets {
 		result, purgeErr := staging.PurgeBatch(batch, log)
@@ -220,6 +225,11 @@ func purgeStaged(staging *deletionengine.StagingArea, ids []string, all, yes boo
 			failed += result.FailedCount
 			bytes += result.BytesReclaimed
 			partial = partial || result.SizePartial
+			for _, outcome := range result.Outcomes {
+				if !outcome.Purged {
+					failures = append(failures, outcome)
+				}
+			}
 		}
 		if purgeErr != nil {
 			fmt.Fprintln(stderr, "wtff staged:", purgeErr)
@@ -233,7 +243,18 @@ func purgeStaged(staging *deletionengine.StagingArea, ids []string, all, yes boo
 	}
 	fmt.Fprintf(stdout, "\ndeleted %d item(s) permanently, %s reclaimed\n", purged, size)
 	if failed > 0 {
-		fmt.Fprintf(stdout, "%d item(s) could not be deleted and are still staged\n", failed)
+		// Naming the reason is the whole point: without it, "could not be
+		// deleted" leaves someone guessing whether it was a permission, a
+		// busy file, or something already gone, when the real answer was
+		// sitting in outcome.Err the entire time and simply was not printed.
+		fmt.Fprintf(stdout, "%d item(s) could not be deleted and are still staged:\n", failed)
+		for _, outcome := range failures {
+			reason := "unknown reason"
+			if outcome.Err != nil {
+				reason = outcome.Err.Error()
+			}
+			fmt.Fprintf(stdout, "  %s: %s\n", outcome.Item.OriginalPath, reason)
+		}
 		exit = 1
 	}
 	if logErr := log.Err(); logErr != nil {
