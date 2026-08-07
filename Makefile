@@ -46,7 +46,19 @@ check: ## Everything that must pass before a change is done
 	go vet ./...
 	go test ./...
 	@$(MAKE) --no-print-directory cross-check
+	@$(MAKE) --no-print-directory completion-check
 	@$(MAKE) --no-print-directory dash-scan
+
+.PHONY: completion-check
+completion-check: ## Syntax check the generated completion scripts in real shells
+	@# Go tests can check the scripts' structure but not whether a shell will
+	@# parse them, and a generated script with an unbalanced quote fails only
+	@# when someone sources it.
+	@go run ./cmd/wtff completion zsh > /tmp/wtff-completion.zsh
+	@go run ./cmd/wtff completion bash > /tmp/wtff-completion.bash
+	@zsh -n /tmp/wtff-completion.zsh && echo "zsh script parses"
+	@bash -n /tmp/wtff-completion.bash && echo "bash script parses"
+	@rm -f /tmp/wtff-completion.zsh /tmp/wtff-completion.bash
 
 .PHONY: cross-check
 cross-check: ## Verify the Intel build compiles and vets from an Apple silicon host

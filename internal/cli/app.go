@@ -78,6 +78,13 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runUninstall(args[1:], stdin, stdout, stderr)
 	case "undo":
 		return runUndo(args[1:], stdin, stdout, stderr)
+	case "completion":
+		return runCompletion(args[1:], stdout, stderr)
+	// Hidden, for a shell to call. Not listed in usage: their output shape is
+	// whatever the completion scripts need, and documenting them would make
+	// that shape a contract.
+	case "__complete-batches", "__complete-apps":
+		return runCompletionValues(args[0], stdout)
 	case "doctor":
 		return runDoctor(args[1:], stdout, stderr)
 	case "purge":
@@ -153,6 +160,10 @@ Usage:
       staging, the audit log, whether the built in rules load, and whether
       Full Disk Access is granted. Exits non-zero if something needs a
       decision, so it can be run from a script.
+
+  wtff completion zsh | bash
+      Print a completion script for the named shell. Completes commands,
+      flags, staged batch identifiers, and installed application names.
 
   wtff version
       Print the version.

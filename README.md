@@ -106,6 +106,20 @@ provenance. wtff is built around three commitments instead:
 
 See `docs/architecture/naming-conventions.md`.
 
+## Shell completion
+
+```bash
+wtff completion zsh > /usr/local/share/zsh/site-functions/_wtff
+```
+
+Start a new shell and tab completion offers commands, flags, staged batch
+identifiers, and installed application names. For bash:
+
+```bash
+wtff completion bash > ~/.wtff-completion.bash
+echo 'source ~/.wtff-completion.bash' >> ~/.bash_profile
+```
+
 ## Releasing
 
 ```bash
