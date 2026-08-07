@@ -1,6 +1,6 @@
 # 0033: scoping process and memory management
 
-Status: scoping, not built. No code exists for this yet.
+Status: dropped. No code exists for this and none is planned.
 
 This entry records what was investigated before any decision was made, so the
 decision that follows rests on measured facts rather than on what a feature
@@ -109,7 +109,20 @@ deletion engine was. It is not an extension of what exists.
 
 ## Decision
 
-Reframed as process visibility only, agreed with the project manager. When
+Dropped, by the project manager, after the scoping above.
+
+The reasoning is the toolkit's own standard: wtff carries only functional
+features. What remained after removing the parts the data cannot support was
+a list of processes with their CPU and memory, and a way to quit one. Activity
+Monitor is installed on every Mac, does exactly that, and does it well. A
+second copy inside wtff would be a feature that exists to look complete rather
+than to do something, which is the one kind of feature this project does not
+carry.
+
+The reframing considered before it was dropped, kept here because it is the
+shape any future attempt should take:
+
+Reframed as process visibility only. When
 built, it shows what is using CPU and memory and lets a person quit something
 themselves with `SIGTERM`, which an application can catch in order to save
 first. It will not send `SIGKILL`, will not offer a memory freeing button, and
