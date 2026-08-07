@@ -107,6 +107,19 @@ deletion engine was. It is not an extension of what exists.
    executable path, parent, whether it is a login item, whether it owns a
    system extension. Reusing the path schema would be forcing a shape.
 
+## Decision
+
+Reframed as process visibility only, agreed with the project manager. When
+built, it shows what is using CPU and memory and lets a person quit something
+themselves with `SIGTERM`, which an application can catch in order to save
+first. It will not send `SIGKILL`, will not offer a memory freeing button, and
+will not describe anything as battery optimisation, because the data available
+without root does not support that claim.
+
+Requiring `sudo` to get real energy figures was considered and rejected: it
+would introduce privilege escalation into a toolkit that deliberately has
+none, which is a larger architectural change than the feature is worth.
+
 ## Recommendation
 
 Build the disk usage browser and the duplicate finder first. Both extend the
