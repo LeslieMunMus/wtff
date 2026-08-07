@@ -257,3 +257,48 @@ func TestDisplayPathShortensTheHomePrefix(t *testing.T) {
 		t.Fatalf("a path outside home should be left alone, got %q", got)
 	}
 }
+
+// A failure reason must be visible, not folded behind the disclosure toggle.
+//
+// This is the defect a real run surfaced: "1 item(s) could not be deleted"
+// appeared under a green tick reading "Deleted 0 item(s) permanently", with
+// the actual reason buried in the details of the success line. Someone
+// reading that has been told something went wrong and given no way to act on
+// it without hunting.
+func TestPurgeFailureShowsItsReasonWithoutExpanding(t *testing.T) {
+	theme := brandTheme
+
+	entry := errorEntry(theme, "1 item(s) could not be deleted and are still staged.",
+		"/tmp/thing: operation not permitted")
+
+	rendered := entry.render(theme)
+	if !strings.Contains(rendered, "operation not permitted") {
+		t.Fatalf("the reason must be visible without pressing anything:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "ctrl+o") {
+		t.Fatalf("a failure reason must not sit behind the disclosure toggle:\n%s", rendered)
+	}
+}
+
+// An error with nothing to say stays a single line rather than growing an
+// empty detail block.
+func TestErrorWithoutDetailsStaysOneLine(t *testing.T) {
+	rendered := errorEntry(brandTheme, "something went wrong").render(brandTheme)
+	if strings.Contains(rendered, "\n") {
+		t.Fatalf("an error with no details should be one line:\n%s", rendered)
+	}
+}
+
+// Successes keep the toggle. It earns its place on a long list of paths where
+// the headline is the whole story, which is the opposite of a failure.
+func TestSuccessDetailsStayBehindTheToggle(t *testing.T) {
+	entry := successEntry(brandTheme, "Deleted 3 item(s)", "/a", "/b", "/c")
+
+	rendered := entry.render(brandTheme)
+	if !strings.Contains(rendered, "ctrl+o") {
+		t.Fatalf("success details should stay collapsed:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "/a") {
+		t.Fatalf("success details should not be expanded by default:\n%s", rendered)
+	}
+}

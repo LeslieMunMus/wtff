@@ -179,28 +179,43 @@ func (p *purgeBatchBlock) Update(msg tea.Msg) (liveBlock, tea.Cmd) {
 		return p, finish(errorEntry(p.theme, "delete failed: "+done.err.Error()))
 	}
 
-	var details []string
+	// Successes and failures are separated rather than listed together. Mixing
+	// them meant the reason an item failed sat behind the disclosure toggle of
+	// a line announcing success, which is the last place someone looks for it.
+	var deleted, failed []string
 	for _, outcome := range done.result.Outcomes {
 		if outcome.Purged {
-			details = append(details, "deleted "+outcome.Item.OriginalPath)
-		} else {
-			details = append(details, "failed  "+outcome.Item.OriginalPath+
-				" ("+outcome.Err.Error()+")")
+			deleted = append(deleted, outcome.Item.OriginalPath)
+			continue
 		}
+		reason := "unknown reason"
+		if outcome.Err != nil {
+			reason = outcome.Err.Error()
+		}
+		failed = append(failed, outcome.Item.OriginalPath+": "+reason)
 	}
 
-	size := humanBytes(done.result.BytesReclaimed)
-	if done.result.SizePartial {
-		size = "at least " + size
+	var entries []transcriptEntry
+
+	// No success line when nothing was deleted. A green tick over "Deleted 0
+	// item(s)" reads as an operation that worked, next to an error saying it
+	// did not.
+	if done.result.PurgedCount > 0 {
+		size := humanBytes(done.result.BytesReclaimed)
+		if done.result.SizePartial {
+			size = "at least " + size
+		}
+		entries = append(entries, successEntry(p.theme,
+			fmt.Sprintf("Deleted %d item(s) permanently · %s reclaimed",
+				done.result.PurgedCount, size),
+			deleted...))
 	}
-	entries := []transcriptEntry{successEntry(p.theme,
-		fmt.Sprintf("Deleted %d item(s) permanently · %s reclaimed",
-			done.result.PurgedCount, size),
-		details...)}
+
 	if done.result.FailedCount > 0 {
 		entries = append(entries, errorEntry(p.theme,
 			fmt.Sprintf("%d item(s) could not be deleted and are still staged.",
-				done.result.FailedCount)))
+				done.result.FailedCount),
+			failed...))
 	}
 	return p, finish(entries...)
 }
@@ -262,27 +277,37 @@ func (u *undoBlock) Update(msg tea.Msg) (liveBlock, tea.Cmd) {
 		return u, finish(errorEntry(u.theme, "restore failed: "+done.err.Error()))
 	}
 
-	var details []string
+	// Split the same way a purge is, so a reason never ends up behind the
+	// disclosure toggle of a line reporting success.
+	var restored, skipped, failed []string
 	for _, outcome := range done.result.Outcomes {
 		switch {
 		case outcome.Restored:
-			details = append(details, "restored "+outcome.Item.OriginalPath)
+			restored = append(restored, outcome.Item.OriginalPath)
 		case outcome.Err != nil:
-			details = append(details, "failed   "+outcome.Item.OriginalPath+" ("+outcome.Err.Error()+")")
+			failed = append(failed, outcome.Item.OriginalPath+": "+outcome.Err.Error())
 		default:
-			details = append(details, "left     "+outcome.Item.OriginalPath+" ("+outcome.Reason+")")
+			skipped = append(skipped, outcome.Item.OriginalPath+": "+outcome.Reason)
 		}
 	}
 
-	entries := []transcriptEntry{successEntry(u.theme,
-		fmt.Sprintf("Restored %d item(s)", done.result.RestoredCount), details...)}
+	var entries []transcriptEntry
+	if done.result.RestoredCount > 0 {
+		entries = append(entries, successEntry(u.theme,
+			fmt.Sprintf("Restored %d item(s)", done.result.RestoredCount), restored...))
+	}
 	if done.result.SkippedCount > 0 {
 		entries = append(entries, mutedEntry(u.theme,
 			fmt.Sprintf("%d item(s) left in staging.", done.result.SkippedCount)))
+		// Why something was left is as actionable as why something failed,
+		// most often an occupied original location, so it is shown too.
+		entries = append(entries, infoDetailEntry(u.theme,
+			"reasons they were left", skipped...))
 	}
 	if done.result.FailedCount > 0 {
 		entries = append(entries, errorEntry(u.theme,
-			fmt.Sprintf("%d item(s) failed to restore.", done.result.FailedCount)))
+			fmt.Sprintf("%d item(s) failed to restore.", done.result.FailedCount),
+			failed...))
 	}
 	return u, finish(entries...)
 }

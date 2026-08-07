@@ -96,8 +96,21 @@ func infoDetailEntry(theme Theme, text string, details ...string) transcriptEntr
 	}
 }
 
-func errorEntry(theme Theme, text string) transcriptEntry {
-	return transcriptEntry{body: "  " + lipgloss.NewStyle().Foreground(theme.Danger).Render("✗ "+text)}
+// errorEntry reports something that went wrong, with its reasons visible
+// rather than folded away.
+//
+// Details on an error start expanded, unlike every other entry. The disclosure
+// toggle earns its place on a list of successes, where the headline is the
+// whole story and the paths are reference. It is exactly wrong on a failure:
+// "one item could not be deleted" without the reason is the sentence a person
+// then has to go hunting to make actionable, and the reason was already in
+// hand when the line was written.
+func errorEntry(theme Theme, text string, details ...string) transcriptEntry {
+	return transcriptEntry{
+		body:     "  " + lipgloss.NewStyle().Foreground(theme.Danger).Render("✗ "+text),
+		details:  details,
+		expanded: len(details) > 0,
+	}
 }
 
 func cancelEntry(theme Theme, what string) transcriptEntry {
