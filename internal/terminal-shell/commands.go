@@ -34,6 +34,8 @@ var homeCommands = []command{
 		start: func(d *Deps, t Theme, _ string) liveBlock { return startStagedFlow(d, t) }},
 	{name: "space", description: "Browse what is using disk space, largest first",
 		start: func(d *Deps, t Theme, _ string) liveBlock { return startSpaceFlow(d, t) }},
+	{name: "duplicates", description: "Find identical files, merge them or stage the extras",
+		start: func(d *Deps, t Theme, _ string) liveBlock { return startDuplicatesFlow(d, t) }},
 	{name: "doctor", description: "Check wtff's own state and this machine's setup",
 		start: func(d *Deps, t Theme, _ string) liveBlock { return startDoctorFlow(d, t) }},
 	{name: "help", description: "Show this list"},

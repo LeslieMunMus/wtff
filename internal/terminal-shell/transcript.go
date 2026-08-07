@@ -105,6 +105,18 @@ func infoDetailEntry(theme Theme, text string, details ...string) transcriptEntr
 // "one item could not be deleted" without the reason is the sentence a person
 // then has to go hunting to make actionable, and the reason was already in
 // hand when the line was written.
+// infoExpandedEntry shows its details rather than folding them away, for
+// output whose specifics are the point rather than reference.
+//
+// A merge report is the case this exists for: knowing that copies moved is
+// almost useless without knowing where they went, so hiding the destinations
+// behind a keypress would withhold the only part worth reading.
+func infoExpandedEntry(theme Theme, text string, details ...string) transcriptEntry {
+	entry := infoDetailEntry(theme, text, details...)
+	entry.expanded = len(details) > 0
+	return entry
+}
+
 func errorEntry(theme Theme, text string, details ...string) transcriptEntry {
 	return transcriptEntry{
 		body:     "  " + lipgloss.NewStyle().Foreground(theme.Danger).Render("✗ "+text),
