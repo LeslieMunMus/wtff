@@ -171,7 +171,8 @@ Then update `url` and `sha256` in `packaging/homebrew/wtff.rb`, and copy it to
 
 ## License
 
-MIT. See `LICENSE`.
+PolyForm Noncommercial 1.0.0. See `LICENSE`. Free for personal, research, and noncommercial
+use; a separate agreement is required to ship a commercial product built on this code.
 
 wtff is an independent, from-scratch project. It does not reuse code, comments, or curated data
 from any other cleanup tool. Architectural ideas and publicly documented facts about macOS are
