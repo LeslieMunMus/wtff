@@ -17,7 +17,7 @@ class Wtff < Formula
   desc "Terminal-first macOS maintenance toolkit"
   homepage "https://github.com/lesliemunmus/wtff"
   url "https://github.com/lesliemunmus/wtff/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  sha256 "3ba40ddd2dd1b70c198c19c57a89814a57e3c3e1c0a2f716874bc18def168c40"
   license "MIT"
   head "https://github.com/lesliemunmus/wtff.git", branch: "main"
 
